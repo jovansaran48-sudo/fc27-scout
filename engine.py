@@ -396,7 +396,10 @@ def director(cid, x, flags, cfg, held_ids, allowance):
     if x["vol"] is not None and x["vol"] > 0.06:
         score *= 0.7
         risks.append("price swings a lot hour to hour")
-    if x["hi7"] and target > x["hi7"]:
+    # Momentum picks aim above recent highs on purpose, so only judge other picks by the week's high,
+    # and only once there are 3 days of hourly prices to make that high meaningful.
+    climbers = all(f.get("key") in ("momentum", "fodder") for f in flags)
+    if x["hi7"] and target > x["hi7"] and x["hours"] >= 72 and not climbers:
         score *= 0.6
         risks.append("target is above this week's high")
     if x["ch24h"] is not None and x["ch24h"] > 0.25:
