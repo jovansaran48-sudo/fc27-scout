@@ -2,13 +2,14 @@ name: Scout Room
 
 on:
   schedule:
-           - cron: "7,22,37,52 * * * *"
+           - cron: "7 * * * *"          # hourly safety net; each run also queues the next one (see the last step)
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
   group: scout-room
@@ -17,7 +18,7 @@ concurrency:
 jobs:
   scout:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -59,3 +60,12 @@ jobs:
 
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # GitHub's timer is often late, so each run starts the next one itself, about 15 minutes apart.
+      - name: Queue the next check
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 720
+          gh api -X POST "repos/${{ github.repository }}/actions/workflows/scout.yml/dispatches" -f ref=main
