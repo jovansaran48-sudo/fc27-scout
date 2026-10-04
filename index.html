@@ -116,6 +116,49 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
 .callout{border-radius:10px;padding:12px 14px;font-size:14px;background:var(--gold-soft);border:1px solid var(--gold)}
 .foot{font-size:12.5px;color:var(--muted);max-width:80ch}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* --- v2 additions --- */
+.plan{border:1px solid var(--pitch);background:linear-gradient(0deg,var(--surface),var(--surface));border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.plan ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px}
+.plan li{padding-left:4px}
+.plan li b{font-weight:600}
+.plan .meta{font-size:13px;color:var(--muted)}
+.jbtn{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
+.jbtn .ring{width:10px;height:10px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+.jbtn.listening .ring{background:var(--down);animation:pulse 1s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 7px var(--down-soft)}}
+.jarvis{border:1px solid var(--ink);border-radius:12px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:10px}
+.jlog{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;font-size:14px}
+.jlog .me{align-self:flex-end;background:var(--raise);border:1px solid var(--line);border-radius:10px 10px 2px 10px;padding:6px 10px;max-width:85%}
+.jlog .jv{align-self:flex-start;background:var(--gold-soft);border-radius:10px 10px 10px 2px;padding:6px 10px;max-width:92%;white-space:pre-line}
+.jrow{display:flex;gap:8px;flex-wrap:wrap}
+.jrow input{flex:1;min-width:180px}
+.chips.tips .chip{cursor:pointer}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
+@media (max-width:1020px){.grid3{grid-template-columns:minmax(0,1fr)}}
+.spark{display:block;width:100%;height:56px}
+.spark.big{height:120px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:2px 9px;font-size:12px;background:var(--raise);color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.chartbox{grid-column:2/-1;display:flex;flex-direction:column;gap:4px}
+@media (max-width:700px){.chartbox{grid-column:1/-1}}
+.mini{width:100%;border-collapse:collapse;font-size:13.5px}
+.mini td{padding:5px 4px;border-bottom:1px solid var(--line)}
+.mini td.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mini tr:last-child td{border-bottom:0}
+.moodword{font-family:var(--display);font-weight:800;font-size:30px;text-transform:uppercase;letter-spacing:.03em;line-height:1}
+.mood-calm{color:var(--ink)} .mood-rising{color:var(--up)} .mood-falling{color:var(--warn)} .mood-crashing{color:var(--down)}
+.var{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:4px 12px;font-size:12.5px;align-items:center;padding-left:10px;border-left:2px solid var(--line)}
+.var span.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.st.sm{font-size:11px;padding:0 6px}
+.results{display:flex;flex-direction:column;gap:6px}
+.res{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,.8fr)) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px}
+@media (max-width:700px){.res{grid-template-columns:repeat(2,minmax(0,1fr))}.res .who{grid-column:1/-1}}
+.sbc{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-bottom:1px solid var(--line)}
+.sbc:last-child{border-bottom:0}
+.new{font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--surface);background:var(--gold);border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px}
+code.topic{font-family:var(--mono);background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:14px;user-select:all;overflow-wrap:anywhere}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
 </style>
 </head>
 <body>
@@ -124,8 +167,20 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
     <h1><small id="plat">FC 27 · PS5 market</small>Scout Room</h1>
     <div class="status">
       <span class="dot" id="dot"></span><span id="statusText">Loading the scouts' latest report…</span>
+      <button class="jbtn" id="jarvisBtn" type="button"><span class="ring"></span>Jarvis</button>
     </div>
   </header>
+
+  <section class="jarvis" id="jarvis" hidden aria-label="Jarvis">
+    <div class="phead"><h2>Jarvis</h2><span class="hint" id="jHint">Tap the mic and speak, or type below.</span></div>
+    <div class="jlog" id="jlog" aria-live="polite"></div>
+    <form class="jrow" id="jForm" autocomplete="off">
+      <button type="button" id="micBtn">🎙 Speak</button>
+      <input id="jInput" placeholder="e.g. what should I buy? · I bought 3 Jacquet at 4800 · anything to sell?">
+      <button class="go" type="submit">Ask</button>
+    </form>
+    <div class="chips tips" id="jTips"></div>
+  </section>
 
   <section class="strip" aria-label="Summary">
     <div><label class="label" for="budget">Investing budget</label><input id="budget" class="num" inputmode="numeric"></div>
@@ -137,6 +192,11 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
 
   <div id="errBox" class="err" hidden></div>
   <div id="warmBox" class="warm" hidden></div>
+
+  <section class="plan" aria-label="Today's plan">
+    <div class="phead"><h2>Today's plan</h2><span class="meta" id="planMeta"></span></div>
+    <ol id="planList"></ol>
+  </section>
 
   <div class="grid">
     <section class="panel">
@@ -151,7 +211,7 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
       <section class="panel">
         <div class="phead"><h2>Your cards</h2><span class="hint" id="holdCount"></span></div>
         <div id="holdList" style="display:flex;flex-direction:column;gap:10px"></div>
-        <details>
+        <details id="manualBox">
           <summary class="hint" style="cursor:pointer">Add a card you already own</summary>
           <form class="form" id="manualForm" style="margin-top:8px">
             <label><span class="label">FUT.GG link or card ID</span><input id="mCard" required style="width:220px"></label>
@@ -160,7 +220,13 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
             <label><span class="label">Target</span><input id="mTarget" class="num"></label>
             <button class="go" type="submit">Add</button>
           </form>
+          <p class="hint" style="margin-top:6px">Tip: use Card search below to find a card by name.</p>
         </details>
+      </section>
+
+      <section class="panel" id="alertsPanel">
+        <h2>Phone alerts</h2>
+        <div id="alertsBody"></div>
       </section>
 
       <section class="panel">
@@ -171,34 +237,63 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
     </div>
   </div>
 
+  <div class="grid3">
+    <section class="panel">
+      <div class="phead"><h2>Market mood</h2><span class="hint" id="moodHint"></span></div>
+      <div id="moodBody"></div>
+    </section>
+    <section class="panel">
+      <div class="phead"><h2>Fodder board</h2><span class="hint">cheapest gold by rating</span></div>
+      <div id="fodderBody"></div>
+    </section>
+    <section class="panel">
+      <div class="phead"><h2>Biggest movers</h2><div class="seg" id="moverSeg"><button type="button" data-mv="up" aria-pressed="true">Rising</button><button type="button" data-mv="down" aria-pressed="false">Falling</button></div></div>
+      <div id="moversBody"></div>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="phead"><h2>Card search</h2><span class="hint" id="searchHint">Search any FC 27 card by name</span></div>
+      <input id="searchBox" placeholder="Type a player name, e.g. Bellingham" autocomplete="off" style="width:100%;font-size:16px;padding:9px 11px">
+      <div class="results" id="searchResults"></div>
+    </section>
+    <section class="panel">
+      <div class="phead"><h2>Live SBCs</h2><span class="hint" id="sbcHint"></span></div>
+      <div id="sbcBody"></div>
+    </section>
+  </div>
+
   <section class="panel">
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="paper" id="tab-paper">Paper trades</button>
       <button role="tab" aria-selected="false" data-tab="watch" id="tab-watch">Watching</button>
       <button role="tab" aria-selected="false" data-tab="reject" id="tab-reject">Turned down</button>
-      <button role="tab" aria-selected="false" data-tab="sold" id="tab-sold">Sold</button>
+      <button role="tab" aria-selected="false" data-tab="sold" id="tab-sold">Sold &amp; profit</button>
       <button role="tab" aria-selected="false" data-tab="rules" id="tab-rules">Rules &amp; backup</button>
     </div>
     <div id="tabBody"></div>
   </section>
 
-  <p class="foot">Prices come from FUT.GG's public PS5 price file. GitHub runs the scouts about every 15 minutes, even when your devices are off. Your cards, sales and rules are saved in this browser only; use "Rules &amp; backup" to move them to another device. Paper trades assume you could buy at the listed price and sell at the target, so real results will be a little worse. Every trade is yours to make in the game; nothing here signs in to EA. All profit figures already take off EA's 5% tax.</p>
+  <p class="foot">Prices come from FUT.GG's public PS5 price file; GitHub runs the scouts about every 13 minutes, even when your devices are off. Paper trades copy how you'd really trade: every card is listed at its target for 1 day (it sells if the price gets there, even while you're away), drops are only acted on at check-ins about every 2 hours, and unsold cards are sold at market after a day. Real results will still be a little worse. Your cards, sales and rules are saved in this browser; Jarvis also gets a copy so it can alert you when to sell. Every trade is yours to make in the game; nothing here signs in to EA. All profit figures take off EA's 5% tax.</p>
 </div>
 
 <script>
-let S = null, tab = 'paper', openForm = null;
+let S = null, CONF = {}, MKT = null, tab = 'paper', openForm = null, moverDir = 'up', chartRange = {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = n => n == null ? '–' : Math.round(n).toLocaleString('en-US');
 const signed = n => n == null ? '–' : (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
 const pct = (n, d=0) => n == null ? '–' : (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n*100).toFixed(d) + '%';
 const pill = (n, text) => `<span class="pill ${n > 0 ? 'up' : n < 0 ? 'down' : 'flat'}">${text ?? signed(n)}</span>`;
-function parseCoins(v){ let s = String(v ?? '').trim().toLowerCase().replace(/[, _]/g,''); if(!s) return NaN;
+function parseCoins(v){ let s = String(v ?? '').trim().toLowerCase().replace(/coins?/g,'').replace(/[, _]/g,''); if(!s) return NaN;
   let m = 1; if (s.endsWith('k')) { m = 1e3; s = s.slice(0,-1); } else if (s.endsWith('m')) { m = 1e6; s = s.slice(0,-1); }
   const n = parseFloat(s); return isFinite(n) ? Math.round(n*m) : NaN; }
 function parseCard(v){ let s = String(v).trim(); if (s.includes('/') && s.includes('-')) s = s.replace(/\/+$/,'').split('/').pop().split('-').pop(); const n = parseInt(s, 10); return isFinite(n) ? n : null; }
 function ago(sec){ if (!sec) return 'not yet'; const s = Math.max(0, Date.now()/1000 - sec);
   return s < 90 ? 'just now' : s < 3600 ? Math.round(s/60) + ' min ago' : (s/3600).toFixed(1) + ' h ago'; }
+function when(sec){ const d = new Date(sec*1000); return d.toLocaleString([], {weekday:'short', hour:'numeric', minute:'2-digit'}); }
+const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 
 // ---- your data, kept in this browser
 const store = {
@@ -208,8 +303,17 @@ const store = {
 let P = store.get('portfolio', {holdings: [], sold: []});
 let R = Object.assign({budget: 100000, daily_limit: 50000, min_profit: 2000, max_copies: 10}, store.get('rules', {}));
 let saveOK = true;
-function savePortfolio(){ saveOK = store.set('portfolio', P); }
+function savePortfolio(){ saveOK = store.set('portfolio', P); syncHoldings(); }
 function saveRules(){ store.set('rules', R); }
+
+// share your cards with Jarvis so it can tell your phone when to sell
+async function syncHoldings(force){
+  if (!CONF.sync_topic) return;
+  const body = JSON.stringify({t: Date.now(), h: P.holdings.map(h => [h.id, h.card_id, h.qty, h.buy, h.target || 0, Math.round(h.bought_at/1000)])});
+  if (!force && store.get('lastSyncBody', '') === body && Date.now() - store.get('lastSync', 0) < 6*3600e3) return;
+  try { const r = await fetch('https://ntfy.sh/' + CONF.sync_topic, {method: 'POST', body});
+        if (r.ok) { store.set('lastSync', Date.now()); store.set('lastSyncBody', body); renderAlerts(); } } catch(e) {}
+}
 
 // ---- money rules (same as the engine)
 const TAX = 0.05;
@@ -218,6 +322,9 @@ const roundUp = p => Math.ceil(p / step(p)) * step(p);
 const afterTax = p => Math.floor(p * (1 - TAX));
 const breakEven = buy => roundUp(buy / (1 - TAX));
 const priceOf = id => S && S.prices ? S.prices[String(id)] ?? null : null;
+const cardUrl = id => `https://www.fut.gg/players/${id % 16777216}/27-${id}/`;
+const nameOf = id => { const h = P.holdings.find(x => x.card_id === id); return h?.name || (MKT && MKT.c[id]?.[0]) || allCards().find(c => c.card === id)?.name || `Card ${id}`; };
+const allCards = () => S ? [...S.buy, ...S.watch, ...S.reject] : [];
 
 function spending(){
   const mid = new Date(); mid.setHours(0,0,0,0);
@@ -228,38 +335,61 @@ function spending(){
 function exitCheck(h, now){
   const r = S.rules, hours = (Date.now() - h.bought_at) / 3.6e6;
   if (now == null) return ['HOLD', 'No live price yet'];
-  if (h.target && now >= h.target) return ['SELL', 'Target price reached'];
-  if (now <= h.buy * (1 - r.stop_loss)) return ['CUT', `Down ${Math.round(r.stop_loss*100)}%: stop-loss`];
-  if (hours >= r.max_hold_hours) return now >= breakEven(h.buy) ? ['SELL', `Held ${Math.round(hours)} hours: sell at break-even or better`]
-                                                                : ['CUT', `Held ${Math.round(hours)} hours without recovering: sell and move on`];
-  return ['HOLD', now < breakEven(h.buy) ? `Needs ${fmt(breakEven(h.buy))} to break even` : 'In profit; waiting for the target'];
+  if (h.target && now >= h.target) return ['SELL', `Target ${fmt(h.target)} reached: if your listing hasn't sold, sell now`];
+  if (now <= h.buy * (1 - r.stop_loss)) return ['CUT', `Down ${Math.round(r.stop_loss*100)}% or more: sell to stop the loss`];
+  if (hours >= r.max_hold_hours) return now >= breakEven(h.buy) ? ['SELL', `Listed ${Math.round(hours)} hours without selling: sell at market (break-even or better)`]
+                                                                : ['CUT', `Listed ${Math.round(hours)} hours without recovering: sell and move on`];
+  return ['HOLD', now < breakEven(h.buy) ? `Keep it listed at ${fmt(h.target)}. Needs ${fmt(breakEven(h.buy))} to break even` : `In profit; keep it listed at ${fmt(h.target)}`];
 }
-function cardLine(r){ return `<span class="who"><span class="n">${r.ovr ? `<span class="ovr">${r.ovr}</span>` : ''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></span>
+function moodWord(m){ if (m == null) return ['Learning', 'calm']; if (m <= -0.08) return ['Crashing','crashing']; if (m <= -0.03) return ['Falling','falling']; if (m >= 0.03) return ['Rising','rising']; return ['Calm','calm']; }
+function cardLine(r){ return `<span class="who"><span class="n">${r.ovr ? `<span class="ovr">${r.ovr}</span>` : ''}<a href="${esc(r.url || cardUrl(r.card || r.id))}" target="_blank" rel="noopener">${esc(r.name)}</a></span>
   <span class="m">${[r.pos, r.rarity].filter(Boolean).map(esc).join(' · ') || 'Tap the name for the card on FUT.GG'}</span></span>`; }
-const cardUrl = id => `https://www.fut.gg/players/${id % 16777216}/27-${id}/`;
+
+// ---- charts
+function spark(vals, opts={}){
+  const pts = vals.map((v,i) => [i, v]).filter(p => p[1] > 0);
+  const W = 300, H = opts.h || 56, pad = 4;
+  if (pts.length < 2) return `<p class="hint" style="margin:0">Chart appears once more prices are recorded.</p>`;
+  const ys = pts.map(p => p[1]), lo = Math.min(...ys, opts.ref ?? Infinity), hi = Math.max(...ys, opts.ref ?? -Infinity);
+  const x = i => pad + (i - pts[0][0]) / Math.max(1, pts[pts.length-1][0] - pts[0][0]) * (W - 2*pad);
+  const y = v => hi === lo ? H/2 : pad + (hi - v) / (hi - lo) * (H - 2*pad);
+  const d = pts.map((p,k) => (k ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(p[1]).toFixed(1)).join(' ');
+  const up = ys[ys.length-1] >= ys[0], col = opts.color || (up ? 'var(--up)' : 'var(--down)');
+  const last = pts[pts.length-1];
+  const ref = opts.ref != null ? `<line x1="0" x2="${W}" y1="${y(opts.ref).toFixed(1)}" y2="${y(opts.ref).toFixed(1)}" stroke="var(--gold)" stroke-dasharray="4 4" stroke-width="1"/>` : '';
+  return `<svg class="spark${opts.big ? ' big' : ''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(opts.label || 'price chart')}">
+    <path d="${d} L${x(last[0]).toFixed(1)} ${H} L${x(pts[0][0]).toFixed(1)} ${H} Z" fill="${col}" opacity=".12"/>
+    ${ref}<path d="${d}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    <circle cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3" fill="${col}"/></svg>`;
+}
+function chartFor(id, range, ref){
+  const c = S.charts?.[String(id)]; if (!c) return '';
+  const vals = range === '7d' ? c.h : range === '3d' ? c.m : c.m.slice(-96);
+  const v = vals.filter(x => x > 0), lo = v.length ? Math.min(...v) : null, hi = v.length ? Math.max(...v) : null;
+  return `<div class="chartbox"><div class="phead"><div class="seg">${['24h','3d','7d'].map(r => `<button type="button" data-chart="${id}" data-range="${r}" aria-pressed="${r === range}">${r}</button>`).join('')}</div>
+    <span class="hint num">low ${fmt(lo)} · high ${fmt(hi)}</span></div>${spark(vals, {ref, label: 'price over ' + range})}</div>`;
+}
 
 // ---- rendering
 function renderStatus(){
-  const age = Date.now()/1000 - S.updated;
-  const st = S.status;
-  const stale = age > 50*60;
+  const age = Date.now()/1000 - S.updated, st = S.status, stale = age > 50*60;
   $('dot').className = 'dot ' + (st.state === 'error' || stale ? 'error' : 'live');
-  $('statusText').textContent = `Prices from ${ago(S.updated)} · ${fmt(S.cards)} cards watched · next check about every 15 min`;
+  $('statusText').textContent = `Prices from ${ago(S.updated)} · ${fmt(S.cards)} cards watched`;
   $('plat').textContent = `FC 27 · ${S.platform} market`;
   const msgs = [];
   if (st.state === 'error') msgs.push(st.message);
-  if (stale) msgs.push(`The scouts haven't reported for ${(age/3600).toFixed(1)} hours. Open the Actions tab of your GitHub repository to see whether a run failed; GitHub sometimes pauses schedules after 60 days without activity.`);
-  if (!saveOK) msgs.push("This browser isn't letting the page save. Your cards will be lost when you close it; try another browser or turn off private browsing.");
+  if (stale) msgs.push(`The scouts haven't reported for ${(age/3600).toFixed(1)} hours. Check the Actions tab of your GitHub project.`);
+  if (!saveOK) msgs.push("This browser isn't letting the page save. Try another browser or turn off private browsing.");
   $('errBox').hidden = !msgs.length; $('errBox').textContent = msgs.join(' ');
   const h = S.hours || 0;
   if (h < 72) {
     $('warmBox').hidden = false;
     $('warmBox').innerHTML = `<b>The scouts are still learning the market: ${h.toFixed(1)} hours of prices recorded.</b>
-      <span>Momentum Rider and Fodder Scout start after about an hour. Dip Hunter, Crash Buyer and Rebound Spotter need a full day, and Daily Swing needs two to three days of day charts before it can prove a card bounces back. Each strategy then paper-trades for ${S.trial.days} days before it can go live.</span>
+      <span>Each strategy is paper-tested in three versions (standard, safe and bold sell targets) for ${S.trial.days} days. Only versions that pass can put real picks on your buy list.</span>
       <div class="bar"><i style="width:${Math.min(100, h/72*100)}%"></i></div>`;
   } else $('warmBox').hidden = true;
-  const mood = S.mood?.ch24h;
-  $('mood').innerHTML = mood == null ? '<span class="hint">needs 24 h</span>' : pill(mood, pct(mood, 1));
+  const m = S.mood?.ch24h, [w] = moodWord(m);
+  $('mood').innerHTML = m == null ? '<span class="hint">needs 24 h</span>' : `${pill(m, pct(m, 1))} <span class="hint">${w}</span>`;
 }
 
 function renderSummary(){
@@ -276,31 +406,56 @@ function sized(){
   const fit = [], tooBig = [];
   for (const r of S.buy) {
     if (held.has(r.card)) continue;
-    const qty = Math.min(R.max_copies, Math.floor(sp.left / r.buy));
+    // trial picks are paper only, so size them as if the whole day's limit were free
+    const qty = Math.min(R.max_copies, Math.floor((r.live ? sp.left : R.daily_limit) / r.buy));
     const row = {...r, qty};
     (qty >= 1 && qty * r.net >= R.min_profit ? fit : tooBig).push(row);
   }
-  return {fit, tooBig, left: sp.left};
+  return {fit, tooBig, left: sp.left, liveTooBig: tooBig.filter(r => r.live).length};
+}
+
+function renderPlan(){
+  const items = [], {fit, left} = sized(), live = fit.filter(r => r.live);
+  const sells = P.holdings.map(h => [h, ...exitCheck(h, priceOf(h.card_id))]).filter(x => x[1] !== 'HOLD');
+  for (const [h, sig, why] of sells) items.push(`<b>${sig === 'SELL' ? 'Sell' : 'Cut'} ${esc(h.name || nameOf(h.card_id))}</b> (×${h.qty}) at about ${fmt(priceOf(h.card_id))}. <span class="meta">${esc(why)}</span>`);
+  if (S.event) items.push(`<b>Hold off on new buys for now.</b> <span class="meta">${esc(S.event)}.</span>`);
+  else if (live.length) {
+    let budget = left;
+    for (const r of live.slice(0, 4)) {
+      const q = Math.min(R.max_copies, Math.floor(budget / r.buy)); if (q < 1 || q * r.net < R.min_profit) continue;
+      budget -= q * r.buy;
+      items.push(`<b>Buy ${q}× ${esc(r.name)}</b>${r.ovr ? ` (${r.ovr})` : ''}, bidding up to ${fmt(r.buy)}, then <b>list each at ${fmt(r.target)}</b> for 1 day. <span class="meta">About +${fmt(q*r.net)} after tax · ${esc(r.strategy || '')}</span>`);
+    }
+  }
+  if (!live.length && !S.event && S.buy.some(r => r.live)) items.push(`<b>No more buys today.</b> <span class="meta">The proven picks don't fit what you have left (${fmt(left)}) with at least ${fmt(R.min_profit)} profit.</span>`);
+  else if (!live.length && !S.event) items.push(`<b>Nothing to buy with real coins yet.</b> <span class="meta">No strategy version has passed its ${S.trial.days}-day paper test. The trial picks below are paper only.</span>`);
+  const listed = P.holdings.filter(h => exitCheck(h, priceOf(h.card_id))[0] === 'HOLD');
+  if (listed.length) items.push(`Keep ${listed.length} card${listed.length > 1 ? 's' : ''} listed at their targets. <span class="meta">Re-list any that expired.</span>`);
+  const nxt = S.events?.[0];
+  if (nxt) items.push(`<span class="meta">Next market event: <b>${esc(nxt.name)}</b>, ${when(nxt.at)} (${esc(nxt.note)}).</span>`);
+  $('planList').innerHTML = items.map(i => `<li>${i}</li>`).join('');
+  $('planMeta').textContent = `${fmt(left)} coins left to spend today`;
 }
 
 function pickHTML(r, i){
-  const key = 'buy-' + r.card, trial = !r.live;
+  const key = 'buy-' + r.card, trial = !r.live, range = chartRange[r.card] || '24h';
   const form = openForm === key ? `<form class="form" data-buyform="${r.card}">
       <label><span class="label">Qty</span><input class="num q" name="qty" value="${r.qty}"></label>
       <label><span class="label">Paid each</span><input class="num" name="buy" value="${r.buy}"></label>
-      <label><span class="label">Sell target</span><input class="num" name="target" value="${r.target}"></label>
+      <label><span class="label">Listed at</span><input class="num" name="target" value="${r.target}"></label>
       <button class="go" type="submit">Add to my cards</button><button type="button" data-cancel>Cancel</button></form>` : '';
   return `<div class="pick${trial ? ' trial' : i < 3 ? ' top' : ''}">
     <span class="rank">${i+1}</span>
     ${cardLine(r)}
     <span class="cell"><span class="label">Bid up to</span><span class="v">${fmt(r.buy)}</span><span class="s">now ${fmt(r.now)}</span></span>
-    <span class="cell"><span class="label">Sell at</span><span class="v">${fmt(r.target)}</span><span class="s">${esc(r.hold)}</span></span>
+    <span class="cell"><span class="label">List at</span><span class="v">${fmt(r.target)}</span><span class="s">${esc(r.hold)}</span></span>
     <span class="cell"><span class="label">Profit</span><span class="v" style="color:var(--up)">+${fmt(r.net*r.qty)}</span><span class="s">+${fmt(r.net)} each · ${pct(r.roi,1)}</span></span>
     <span class="cell"><span class="label">Buy</span><span class="v">×${r.qty}</span><span class="s">= ${fmt(r.qty*r.buy)}</span></span>
+    ${chartFor(r.card, range, r.target)}
     <div class="notes">
-      <div class="chips"><span class="chip dir">Director: buy · score ${r.score}</span>${trial ? '<span class="st">ON TRIAL</span>' : '<span class="st LIVE">PROVEN</span>'}${r.scouts.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
+      <div class="chips"><span class="chip dir">Director: buy · score ${r.score}</span>${trial ? '<span class="st">ON TRIAL</span>' : `<span class="st LIVE">PROVEN</span><span class="chip">${esc(r.strategy)}</span>`}${r.scouts.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
       <p class="why">${r.why.map(esc).map(w => w[0].toUpperCase()+w.slice(1)).join('. ')}.${r.notes.length ? ` <span>${r.notes.map(esc).join(' · ')}</span>` : ''}</p>
-      ${form || `<div class="acts">${trial ? '<span class="hint">Paper-trading this pick. Don\'t spend coins on it until the strategy passes its test.</span>' : `<button class="go" data-open="${key}">I bought it</button>`}<a class="hint" href="${esc(r.url)}" target="_blank" rel="noopener">Price chart on FUT.GG ↗</a></div>`}
+      ${form || `<div class="acts">${trial ? '<span class="hint">Paper-trading this pick. Don\'t spend coins on it until a strategy version passes its test.</span>' : `<button class="go" data-open="${key}">I bought it</button>`}<a class="hint" href="${esc(r.url)}" target="_blank" rel="noopener">FUT.GG ↗</a></div>`}
     </div></div>`;
 }
 
@@ -310,11 +465,11 @@ function renderBuy(){
   $('buyHint').textContent = live.length ? `${live.length} from proven strategies` : '';
   let html = '';
   if (left <= 0) html += `<p class="callout">You've used today's ${fmt(R.daily_limit)}-coin limit${R.budget - spending().inCards <= 0 ? ' or your whole budget' : ''}. New buys open again at midnight.</p>`;
+  if (S.event) html += `<p class="callout">${esc(S.event)}.</p>`;
   if (live.length) html += `<div style="display:flex;flex-direction:column;gap:10px">${live.map(pickHTML).join('')}</div>`;
-  else html += `<p class="callout"><b>Nothing to buy with real coins yet.</b> No strategy has passed its ${S.trial.days}-day paper test. A strategy goes live once it has at least ${S.trial.min_trades} paper trades, wins ${Math.round(S.trial.min_winrate*100)}% or more, and is in profit after tax.</p>`;
-  if (trial.length) html += `<h2 style="font-size:18px;margin-top:6px">On trial · paper only</h2><div style="display:flex;flex-direction:column;gap:10px">${trial.slice(0,20).map((r,i) => pickHTML(r, i + live.length)).join('')}</div>`;
-  if (!S.buy.length) html += `<p class="empty">${(S.hours||0) < 1 ? 'The scouts are recording their first prices. Picks appear here within the hour.'
-      : 'No card passes the director right now. That is normal on a quiet market; the list updates about every 15 minutes.'}</p>`;
+  else if (!S.buy.some(r => r.live)) html += `<p class="callout"><b>Nothing to buy with real coins yet.</b> A strategy version goes live once it has at least ${S.trial.min_trades} paper trades over ${S.trial.days}+ days, wins ${Math.round(S.trial.min_winrate*100)}% or more, and is in profit after tax.</p>`;
+  if (trial.length) html += `<h2 style="font-size:18px;margin-top:6px">On trial · paper only</h2><div style="display:flex;flex-direction:column;gap:10px">${trial.slice(0,15).map((r,i) => pickHTML(r, i + live.length)).join('')}</div>`;
+  if (!S.buy.length) html += `<p class="empty">${(S.hours||0) < 1 ? 'The scouts are recording their first prices.' : 'No card passes the director right now. That is normal on a quiet market; the list updates every few minutes.'}</p>`;
   if (tooBig.length) html += `<p class="hint">${tooBig.length} more approved pick${tooBig.length === 1 ? '' : 's'} don't fit what you have left today or can't reach your ${fmt(R.min_profit)}-coin minimum profit.</p>`;
   $('buyList').innerHTML = html;
 }
@@ -323,31 +478,78 @@ function renderHold(){
   $('holdCount').textContent = P.holdings.length ? `${P.holdings.length} held` : '';
   $('holdList').innerHTML = P.holdings.length ? P.holdings.map(h => {
     const now = priceOf(h.card_id), [sig, why] = exitCheck(h, now), pl = now == null ? null : (afterTax(now) - h.buy) * h.qty;
-    const name = h.name || S.names?.[h.card_id] || `Card ${h.card_id}`;
-    const key = 'sell-' + h.id;
+    const name = h.name || nameOf(h.card_id), key = 'sell-' + h.id;
     const form = openForm === key ? `<form class="form" data-sellform="${h.id}"><label><span class="label">Sold at (each)</span><input class="num" name="price" value="${now ?? h.buy}"></label>
       <button class="go" type="submit">Confirm sale</button><button type="button" data-cancel>Cancel</button></form>`
       : openForm === 'del-' + h.id ? `<div class="acts"><span class="hint">Remove without recording a sale?</span><button data-delyes="${h.id}">Remove</button><button data-cancel>Keep</button></div>`
       : `<div class="acts"><button data-open="${key}">Sold it</button><button class="ghost" data-open="del-${h.id}" aria-label="Remove ${esc(name)}">Remove</button></div>`;
+    const c = S.charts?.[String(h.card_id)];
     return `<div class="hold">
       <div class="top">${cardLine({name, url: cardUrl(h.card_id), ovr: h.ovr})}<span class="sig ${sig}">${sig}</span></div>
       <p class="why" style="font-size:13px">${esc(why)}</p>
+      ${c ? spark(c.m.slice(-96), {ref: h.buy, label: 'price over 24 hours'}) : ''}
       <div class="kv"><span class="cell"><span class="label">Paid</span><span class="num">${fmt(h.buy)}${h.qty > 1 ? ' ×' + h.qty : ''}</span></span>
         <span class="cell"><span class="label">Now</span><span class="num">${fmt(now)}</span></span>
         <span class="cell"><span class="label">P/L</span>${pl == null ? '–' : pill(pl)}</span></div>
-      <span class="hint">Break-even ${fmt(breakEven(h.buy))}${h.target ? ' · target ' + fmt(h.target) : ''}</span>
+      <span class="hint">Break-even ${fmt(breakEven(h.buy))}${h.target ? ' · listed at ' + fmt(h.target) : ''}</span>
       ${form}</div>`;
   }).join('') : '<p class="empty">Cards you buy from the list show up here with a sell signal.</p>';
 }
 
+function renderAlerts(){
+  const t = CONF.alerts_topic;
+  if (!t) { $('alertsBody').innerHTML = '<p class="hint">Phone alerts aren\'t set up in this project yet.</p>'; return; }
+  const last = store.get('lastSync', 0);
+  $('alertsBody').innerHTML = `<p class="hint" style="margin:0">Jarvis messages your phone when a proven pick appears, when one of your cards should be sold, when a strategy passes or fails, and with a briefing every morning.</p>
+    <ol class="steps">
+      <li>Install the free <b>ntfy</b> app (App Store or Google Play).</li>
+      <li>Tap <b>+</b> and subscribe to: <code class="topic">${esc(t)}</code></li>
+      <li>Tap <b>Send test alert</b> below to check it works.</li>
+    </ol>
+    <div class="acts"><button type="button" id="testAlert">Send test alert</button><span class="hint" id="alertMsg" role="status"></span></div>
+    <p class="hint" style="margin:0">Your cards shared with Jarvis: ${P.holdings.length ? `${P.holdings.length}, ${last ? 'updated ' + ago(last/1000) : 'not yet'}` : 'none yet'}${S && S.synced != null ? ` · Jarvis has ${S.synced}` : ''}.</p>`;
+}
+
 function renderScouts(){
-  $('trialRule').textContent = `Each strategy paper-trades for ${S.trial.days} days. It goes live after ${S.trial.min_trades}+ trades with ${Math.round(S.trial.min_winrate*100)}%+ wins and a profit after tax, and switches off if its last 7 days stop meeting that.`;
-  $('scoutList').innerHTML = S.scouts.map(s => `<div class="scout"><b>${esc(s.name)}</b><span class="f">${esc(s.focus)}</span>
-    <span class="c st ${s.status}">${s.status === 'TRIAL' ? 'TRIAL · day ' + Math.min(S.trial.days, Math.floor(s.days) + 1) : s.status}</span>
-    <div class="score"><span>Paper trades<b>${s.trades}${s.open ? ' + ' + s.open + ' open' : ''}</b></span><span>Win rate<b>${s.winrate == null ? '–' : Math.round(s.winrate*100) + '%'}</b></span>
-    <span>Profit<b style="color:var(${s.net > 0 ? '--up' : s.net < 0 ? '--down' : '--ink'})">${signed(s.net)}</b></span></div></div>`).join('') +
-    `<div class="scout"><b>Chief director</b><span class="f">Checks profit after tax, the day and 3-day charts, risk and your limits, then approves or turns down every flag</span>
+  $('trialRule').textContent = `Each strategy is paper-tested with three sell targets: standard, safe (closer) and bold (higher). A version goes live after ${S.trial.min_trades}+ trades over ${S.trial.days}+ days with ${Math.round(S.trial.min_winrate*100)}%+ wins and a profit after tax, and switches off if its last 7 days stop meeting that.`;
+  const groups = {};
+  for (const s of S.scouts) (groups[s.base] = groups[s.base] || []).push(s);
+  $('scoutList').innerHTML = Object.values(groups).map(vs => {
+    const s0 = vs[0], best = vs.find(v => v.status === 'LIVE') ? 'LIVE' : vs.every(v => v.status === 'OFF') ? 'OFF' : 'TRIAL';
+    return `<div class="scout"><b>${esc(s0.name)}</b><span class="f">${esc(s0.focus)} · ${s0.flagged} flagged now</span>
+      <span class="c st ${best}">${best === 'TRIAL' ? 'TRIAL · day ' + Math.min(S.trial.days, Math.floor(Math.max(...vs.map(v => v.days))) + 1) : best}</span>
+      <div class="var" style="grid-column:1/-1;margin-top:4px">${vs.map(v => `<span>${esc(v.variant)}</span><span class="st sm ${v.status}">${v.status}</span>
+        <span class="n">${v.trades}${v.open ? '+' + v.open : ''} · ${v.winrate == null ? '–' : Math.round(v.winrate*100) + '%'}</span>
+        <span class="n" style="color:var(${v.net > 0 ? '--up' : v.net < 0 ? '--down' : '--muted'})">${signed(v.net)}</span>`).join('')}</div></div>`;
+  }).join('') + `<div class="scout"><b>Chief director</b><span class="f">Checks profit after tax, the day/3-day/week charts, how often the card trades, the market's mood, EA's weekly schedule and your limits</span>
     <span class="c chip dir">${S.buy.length} approved</span></div>`;
+}
+
+function renderMarket(){
+  const m = S.mood?.ch24h, [w, cls] = moodWord(m), hist = (S.mood_hist || []).map(r => r[1]);
+  $('moodHint').textContent = m == null ? '' : `${pct(m,1)} in 24h`;
+  $('moodBody').innerHTML = `<span class="moodword mood-${cls}">${w}</span>
+    <p class="hint" style="margin:0">${m == null ? 'Needs a full day of prices before it can judge the market.' :
+      cls === 'crashing' ? 'Most cards are falling hard. The director only lets Crash Buyer and Rebound Spotter buy today.' :
+      cls === 'falling' ? 'Prices are sliding. The director asks for extra profit before approving a buy.' :
+      cls === 'rising' ? 'Prices are climbing. A good time to sell what you hold.' : 'Normal trading. The director uses its usual rules.'}</p>
+    ${hist.length > 1 ? spark(hist, {ref: 0, color: 'var(--gold)', big: true, label: 'market change over the last two weeks'}) + '<span class="hint">Market change over 24h, recorded hourly · gold line = no change</span>' : ''}
+    <table class="mini">${(S.events || []).map(e => `<tr><td><b>${esc(e.name)}</b><br><span class="hint">${esc(e.note)}</span></td><td class="n">${when(e.at)}</td></tr>`).join('')}</table>`;
+  const f = S.fodder || [];
+  $('fodderBody').innerHTML = f.length ? `<table class="mini">${f.map(r => `<tr><td><span class="ovr">${r.ovr}</span><a href="${cardUrl(r.card)}" target="_blank" rel="noopener">${esc(r.name || 'Card')}</a></td>
+      <td class="n">${fmt(r.price)}</td><td class="n">${r.prev ? pill(r.price/r.prev - 1, pct(r.price/r.prev - 1)) : ''}</td></tr>`).join('')}</table>
+      <p class="hint" style="margin:0">Cheapest normal gold card at each rating. Rising fodder usually means a popular SBC needs it.</p>`
+    : '<p class="empty">Fills in once the scouts have read FUT.GG\'s player list (a few hours).</p>';
+  const mv = (S.movers || {})[moverDir] || [];
+  document.querySelectorAll('#moverSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mv === moverDir));
+  $('moversBody').innerHTML = mv.length ? `<table class="mini">${mv.map(r => `<tr><td>${r.ovr ? `<span class="ovr">${r.ovr}</span>` : ''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></td>
+      <td class="n">${fmt(r.now)}</td><td class="n">${pill(r.ch24h, pct(r.ch24h))}</td></tr>`).join('')}</table>`
+    : '<p class="empty">Needs a day of prices.</p>';
+  const sb = S.sbcs || [];
+  $('sbcHint').textContent = sb.length ? `${sb.filter(s => s.new).length} new` : '';
+  $('sbcBody').innerHTML = sb.length ? sb.slice(0, 10).map(s => `<div class="sbc"><a href="${esc(s.url)}" target="_blank" rel="noopener"><b>${esc(s.name)}</b></a>${s.new ? '<span class="new">NEW</span>' : ''}
+      <span class="hint">${esc(s.desc || '')}</span><span class="hint num">${s.cost ? 'Costs about ' + fmt(s.cost) + ' · ' : ''}${s.ends ? 'ends ' + when(Date.parse(s.ends)/1000) : ''}</span></div>`).join('')
+    : '<p class="empty">SBC list appears after the next check.</p>';
 }
 
 function tableRows(rows, kind){
@@ -357,24 +559,35 @@ function tableRows(rows, kind){
       <td class="n">${pill(r.net, `${signed(r.net)} (${pct(r.roi,1)})`)}</td><td>${r.scouts.map(esc).join(', ')}</td><td>${r.notes.map(esc).join('. ')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
+function profitChart(){
+  const sold = P.sold.slice().sort((a,b) => a.sold_at - b.sold_at);
+  if (sold.length < 2) return '<p class="hint">Your profit chart appears after your second recorded sale.</p>';
+  let run = 0; const vals = sold.map(s => run += (afterTax(s.sold) - s.buy) * s.qty);
+  const best = sold.reduce((a,b) => (afterTax(b.sold)-b.buy)*b.qty > (afterTax(a.sold)-a.buy)*a.qty ? b : a);
+  const worst = sold.reduce((a,b) => (afterTax(b.sold)-b.buy)*b.qty < (afterTax(a.sold)-a.buy)*a.qty ? b : a);
+  const wins = sold.filter(s => afterTax(s.sold) > s.buy).length;
+  return `<div class="phead"><b>Total profit over time</b><span class="hint">${wins} of ${sold.length} trades won · best ${esc(best.name)} ${signed((afterTax(best.sold)-best.buy)*best.qty)} · worst ${esc(worst.name)} ${signed((afterTax(worst.sold)-worst.buy)*worst.qty)}</span></div>
+    ${spark(vals, {ref: 0, big: true, color: run >= 0 ? 'var(--up)' : 'var(--down)', label: 'your total profit over time'})}`;
+}
+
 function renderTab(){
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
   let html = '';
   if (tab === 'paper') {
     const held = ts => { const h = (S.updated - ts)/3600; return h < 1 ? Math.round(h*60) + ' min' : h.toFixed(1) + ' h'; };
-    html = `<p class="hint">Pretend trades at real live prices. Each one is sold by the same rules you'd use: at the target, at a ${Math.round(S.rules.stop_loss*100)}% stop-loss, or after ${S.rules.max_hold_hours} hours.</p>`;
-    html += S.paper_open.length ? `<h2 style="font-size:18px">Open (${S.paper_open.length})</h2><div class="tablewrap"><table><thead><tr><th>Card</th><th>Strategy</th><th class="n">Paid</th><th class="n">Now</th><th class="n">Target</th><th class="n">P/L after tax</th><th>Held</th></tr></thead><tbody>${
-      S.paper_open.map(t => `<tr><td><a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.name)}</a></td><td>${esc(t.strategy)}</td><td class="n">${fmt(t.buy)}</td><td class="n">${fmt(t.now)}</td><td class="n">${fmt(t.target)}</td><td class="n">${t.pl == null ? '–' : pill(t.pl)}</td><td>${held(t.opened)}</td></tr>`).join('')}</tbody></table></div>`
+    html = `<p class="hint">Pretend trades at real live prices, sold the way you'd really sell: listed at the target for 1 day, drops acted on at check-ins about every ${S.rules.checkin_hours} hours (stop-loss ${Math.round(S.rules.stop_loss*100)}%), and sold at market after ${S.rules.max_hold_hours} hours.</p>`;
+    html += S.paper_open.length ? `<h2 style="font-size:18px">Open (${S.paper_open.length})</h2><div class="tablewrap"><table><thead><tr><th>Card</th><th>Strategy</th><th class="n">Paid</th><th class="n">Now</th><th class="n">Listed at</th><th class="n">P/L after tax</th><th>Held</th></tr></thead><tbody>${
+      S.paper_open.slice(0, 40).map(t => `<tr><td><a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.name)}</a></td><td>${esc(t.strategy)}</td><td class="n">${fmt(t.buy)}</td><td class="n">${fmt(t.now)}</td><td class="n">${fmt(t.target)}</td><td class="n">${t.pl == null ? '–' : pill(t.pl)}</td><td>${held(t.opened)}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="empty">No open paper trades yet.</p>';
     html += S.paper_closed.length ? `<h2 style="font-size:18px;margin-top:8px">Closed</h2><div class="tablewrap"><table><thead><tr><th>Card</th><th>Strategy</th><th class="n">Paid</th><th class="n">Sold</th><th class="n">Profit after tax</th><th>Why it closed</th></tr></thead><tbody>${
-      S.paper_closed.map(t => `<tr><td><a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.name)}</a></td><td>${esc(t.strategy)}</td><td class="n">${fmt(t.buy)}</td><td class="n">${fmt(t.sold)}</td><td class="n">${pill(t.net)}</td><td>${esc(t.reason)}</td></tr>`).join('')}</tbody></table></div>` : '';
+      S.paper_closed.slice(0, 40).map(t => `<tr><td><a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.name)}</a></td><td>${esc(t.strategy)}</td><td class="n">${fmt(t.buy)}</td><td class="n">${fmt(t.sold)}</td><td class="n">${pill(t.net)}</td><td>${esc(t.reason)}</td></tr>`).join('')}</tbody></table></div>` : '';
   }
   if (tab === 'watch') html = `<p class="hint">The director sees some upside but not enough to buy yet.</p>` + tableRows(S.watch, 'watch');
   if (tab === 'reject') html = `<p class="hint">Flags the director turned down, and why.</p>` + tableRows(S.reject, 'reject');
-  if (tab === 'sold') html = P.sold.length ? `<div class="tablewrap"><table><thead><tr><th>Card</th><th class="n">Qty</th><th class="n">Paid</th><th class="n">Sold</th><th class="n">Profit</th><th>Date</th><th></th></tr></thead><tbody>${
+  if (tab === 'sold') html = profitChart() + (P.sold.length ? `<div class="tablewrap"><table><thead><tr><th>Card</th><th class="n">Qty</th><th class="n">Paid</th><th class="n">Sold</th><th class="n">Profit</th><th>Date</th><th></th></tr></thead><tbody>${
       P.sold.slice().reverse().map(s => `<tr><td>${esc(s.name || 'Card ' + s.card_id)}</td><td class="n">${s.qty}</td><td class="n">${fmt(s.buy)}</td><td class="n">${fmt(s.sold)}</td><td class="n">${pill((afterTax(s.sold) - s.buy)*s.qty)}</td>
       <td>${new Date(s.sold_at).toLocaleDateString()}</td><td><button class="ghost" data-solddel="${s.id}" aria-label="Remove from history">Remove</button></td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="empty">Sales you record show up here with their real profit after tax.</p>';
+      : '<p class="empty">Sales you record show up here with their real profit after tax.</p>');
   if (tab === 'rules') {
     html = `<form id="rulesForm" class="rules">
         <label><span class="label">Minimum profit per pick (coins)</span><input class="num" id="rProfit" value="${R.min_profit}"></label>
@@ -392,16 +605,141 @@ function renderTab(){
   $('tabBody').innerHTML = html;
 }
 
+// ---- card search (loads the full card list on first use)
+async function loadMarket(){
+  if (MKT) return MKT;
+  $('searchHint').textContent = 'Loading every card…';
+  try { MKT = await (await fetch('market.json?t=' + Date.now(), {cache: 'no-store'})).json(); $('searchHint').textContent = `${fmt(Object.keys(MKT.c).length)} cards`; }
+  catch(e) { $('searchHint').textContent = 'The card list will be ready after the next check.'; }
+  return MKT;
+}
+function findCards(q, limit=12){
+  if (!MKT) return [];
+  const id = parseCard(q);
+  if (id && MKT.c[id]) return [[String(id), MKT.c[id]]];
+  const n = norm(q).trim(); if (n.length < 2) return [];
+  const words = n.split(/\s+/);
+  return Object.entries(MKT.c).filter(([k,v]) => v[0] && words.every(w => norm(v[0]).includes(w)))
+    .sort((a,b) => (b[1][1]||0) - (a[1][1]||0)).slice(0, limit);
+}
+function renderSearch(){
+  const q = $('searchBox').value; if (!q.trim()) { $('searchResults').innerHTML = ''; return; }
+  const hits = findCards(q);
+  $('searchResults').innerHTML = hits.length ? hits.map(([id, v]) => `<div class="res">
+      ${cardLine({name: v[0], ovr: v[1], rarity: v[2], url: cardUrl(+id)})}
+      <span class="cell"><span class="label">Price</span><span class="num">${fmt(v[3])}</span></span>
+      <span class="cell"><span class="label">24h</span>${v[4] == null ? '–' : pill(v[4], pct(v[4]/1000, 1))}</span>
+      <span class="cell"><span class="label">7-day range</span><span class="num">${v[5] ? fmt(v[5]) + '–' + fmt(v[6]) : '–'}</span></span>
+      <button type="button" data-own="${id}">I own this</button></div>`).join('')
+    : `<p class="hint">${MKT ? 'No card found. Names fill in over the first day while the scouts read FUT.GG\'s player list; you can also paste a FUT.GG link.' : 'Loading…'}</p>`;
+}
+
+// ---- Jarvis
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
+const WORDNUM = {one:1, a:1, an:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10};
+function say(text, me){
+  const div = document.createElement('div'); div.className = me ? 'me' : 'jv'; div.textContent = text; $('jlog').appendChild(div); $('jlog').scrollTop = 1e9;
+  if (!me && window.speechSynthesis && store.get('voice', true)) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/×/g, ' times ').replace(/·/g, ',')); u.rate = 1.05; speechSynthesis.speak(u); } catch(e){} }
+}
+function matchCard(text){
+  const t = norm(text);
+  const pool = [...P.holdings.map(h => ({card: h.card_id, name: h.name || nameOf(h.card_id)})), ...allCards(), ...(S.paper_open||[]).map(p => ({card: p.card, name: p.name}))];
+  let hit = pool.find(c => c.name && t.includes(norm(c.name)));
+  if (!hit) hit = pool.find(c => c.name && norm(c.name).split(/\s+/).some(w => w.length > 3 && t.includes(w)));
+  if (!hit && MKT) { const words = t.split(/\s+/).filter(w => w.length > 3 && !/bought|sold|coins|thousand|copies|price/.test(w));
+    for (const w of words) { const f = findCards(w, 1)[0]; if (f) { hit = {card: +f[0], name: f[1][0]}; break; } } }
+  return hit;
+}
+function numbersIn(text){
+  return (text.toLowerCase().replace(/(\d),(\d)/g,'$1$2').match(/\d+(\.\d+)?\s*(k|thousand)?/g) || [])
+    .map(s => /k|thousand/.test(s) ? Math.round(parseFloat(s) * 1000) : parseFloat(s));
+}
+async function jarvis(q){
+  if (!S) return say("I'm still loading the scouts' report. Try again in a moment.");
+  const t = q.toLowerCase().trim();
+  if (/^(help|what can you do)/.test(t) || !t) return say('Ask me: what should I buy, anything to sell, how are the scouts doing, how is the market, fodder prices, new SBCs, price of a player. Or tell me: I bought 3 Jacquet at 4800, or I sold Jacquet at 5500.');
+  if (/\b(i|just)\s+(bought|got|purchased|picked up)\b/.test(t)) {
+    await loadMarket();
+    const c = matchCard(t); if (!c) return say("I couldn't tell which card. Try saying the player's name, like: I bought 3 Jacquet at 4800.");
+    const nums = numbersIn(t), price = nums.filter(n => n >= 150).pop(), wq = t.match(/\b(one|a|an|two|three|four|five|six|seven|eight|nine|ten)\b/);
+    let qty = nums.find(n => n >= 1 && n <= 20) || (wq ? WORDNUM[wq[1]] : 1);
+    if (!price) return say(`How much did you pay for ${c.name}? Say: I bought ${qty} ${c.name} at 4800.`);
+    const pick = allCards().find(r => r.card === c.card);
+    const target = pick?.target || roundUp(price * 1.1);
+    P.holdings.push({id: newId(), card_id: c.card, name: c.name, ovr: pick?.ovr, qty, buy: price, target, bought_at: Date.now()});
+    changed();
+    return say(`Logged ${qty}× ${c.name} at ${fmt(price)}. List ${qty > 1 ? 'them' : 'it'} at ${fmt(target)} for 1 day. Break-even is ${fmt(breakEven(price))}. I'll message your phone if you should sell.`);
+  }
+  if (/\b(i|just)\s+sold\b/.test(t)) {
+    const c = matchCard(t), h = c && P.holdings.find(x => x.card_id === c.card);
+    if (!h) return say("I couldn't find that card in your cards. Say the player's name, like: I sold Jacquet at 5500.");
+    const price = numbersIn(t).filter(n => n >= 150).pop() || priceOf(h.card_id);
+    P.holdings = P.holdings.filter(x => x !== h);
+    P.sold.push({...h, name: h.name || c.name, sold: price, sold_at: Date.now()}); changed();
+    const p = (afterTax(price) - h.buy) * h.qty;
+    return say(`Recorded: sold ${h.qty}× ${h.name || c.name} at ${fmt(price)}. ${p >= 0 ? 'Profit' : 'Loss'} after tax: ${signed(p)} coins.`);
+  }
+  if (/sell|my cards|holding|what do i (have|own)/.test(t)) {
+    if (!P.holdings.length) return say("You don't have any cards logged. When you buy one, tell me: I bought 2 Jacquet at 4800.");
+    const lines = P.holdings.map(h => { const [sig, why] = exitCheck(h, priceOf(h.card_id)); return `${h.name || nameOf(h.card_id)}: ${sig === 'HOLD' ? 'hold' : sig === 'SELL' ? 'sell now' : 'cut the loss'}. ${why}.`; });
+    return say(lines.join('\n'));
+  }
+  if (/buy|pick|invest|what should i/.test(t)) {
+    if (S.event) return say(`Hold off for now. ${S.event}.`);
+    const {fit, left} = sized(), live = fit.filter(r => r.live);
+    if (!live.length) {
+      if (S.buy.some(r => r.live)) return say(`There are proven picks, but none fit what you have left today (${fmt(left)} coins) with at least ${fmt(R.min_profit)} profit. New buys open again at midnight.`);
+      const trial = fit[0]; return say(`Nothing to buy with real coins yet: no strategy version has passed its paper test.${trial ? ` The top trial pick is ${trial.name} at ${fmt(trial.buy)}, but that's paper only.` : ''}`); }
+    return say(live.slice(0, 3).map((r, i) => `${i+1}. ${r.qty}× ${r.name} at up to ${fmt(r.buy)}, list at ${fmt(r.target)}, about +${fmt(r.qty*r.net)}.`).join('\n') + `\nYou have ${fmt(left)} left to spend today.`);
+  }
+  if (/scout|strateg|test|scorecard|director|paper/.test(t)) {
+    const live = S.scouts.filter(s => s.status === 'LIVE'), best = S.scouts.filter(s => s.trades).sort((a,b) => b.net - a.net)[0];
+    const open = S.paper_open.length, closed = S.scouts.reduce((s,v) => s + v.trades, 0);
+    return say(`${live.length ? live.length + ' strategy versions are live: ' + live.map(s => s.name + ' ' + s.variant).join(', ') + '.' : 'No strategy version has passed yet.'} ${closed} paper trades closed this week, ${open} open.${best ? ` Best so far: ${best.name} (${best.variant}) at ${signed(best.net)} coins.` : ''}`);
+  }
+  if (/market|mood|crash|event|promo|totw/.test(t)) {
+    const m = S.mood?.ch24h, [w] = moodWord(m), e = S.events?.[0];
+    return say(`${m == null ? "I can't judge the market until there's a full day of prices." : `The market is ${w.toLowerCase()}: ${pct(m,1)} over 24 hours.`}${e ? ` Next up: ${e.name}, ${when(e.at)}, ${e.note}.` : ''}`);
+  }
+  if (/fodder|rated|rating/.test(t)) {
+    const f = (S.fodder || []).slice(0, 5); if (!f.length) return say('The fodder board fills in once the scouts have read the player list.');
+    return say('Cheapest golds: ' + f.map(r => `${r.ovr} rated ${fmt(r.price)}`).join(', ') + '.');
+  }
+  if (/sbc/.test(t)) {
+    const n = (S.sbcs || []).filter(s => s.new); return say(n.length ? `${n.length} new SBCs: ${n.slice(0,4).map(s => s.name).join(', ')}.` : 'No new SBCs right now.');
+  }
+  if (/price|how much|worth|cost/.test(t)) {
+    await loadMarket(); const c = matchCard(t); if (!c) return say("Which player? Say: price of Jacquet.");
+    const v = MKT?.c[c.card], now = priceOf(c.card);
+    return say(`${c.name} is ${fmt(now ?? v?.[3])} coins${v && v[4] != null ? `, ${pct(v[4]/1000,1)} in 24 hours` : ''}${v && v[5] ? `. This week: ${fmt(v[5])} to ${fmt(v[6])}` : ''}.`);
+  }
+  if (/voice off|be quiet|mute/.test(t)) { store.set('voice', false); return say('Voice off. I\'ll reply in text.'); }
+  if (/voice on|talk/.test(t)) { store.set('voice', true); return say('Voice on.'); }
+  say("I didn't catch that. Try: what should I buy, anything to sell, or I bought 3 Jacquet at 4800.");
+}
+function listen(){
+  if (!SR) return say("Voice isn't available in this browser. Chrome on a computer or Android works best; you can type instead.");
+  if (listening) { rec.stop(); return; }
+  rec = new SR(); rec.lang = 'en-GB'; rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onresult = e => { const text = e.results[0][0].transcript; say(text, true); jarvis(text); };
+  rec.onerror = e => { if (e.error === 'not-allowed') say('Chrome blocked the microphone. Click the lock icon in the address bar and allow the microphone.'); };
+  rec.onend = () => { listening = false; $('jarvisBtn').classList.remove('listening'); $('micBtn').textContent = '🎙 Speak'; };
+  listening = true; $('jarvisBtn').classList.add('listening'); $('micBtn').textContent = '■ Stop'; rec.start();
+}
+
+// ---- wiring
 function render(){
   if (!S) return;
   renderStatus(); renderSummary();
   const busy = openForm || (document.activeElement && document.activeElement.closest && document.activeElement.closest('form, textarea'));
   if (busy) return;
-  renderBuy(); renderHold(); renderScouts(); renderTab();
+  renderPlan(); renderBuy(); renderHold(); renderAlerts(); renderScouts(); renderMarket(); renderTab();
 }
-function fullRender(){ if (!S) return; renderStatus(); renderSummary(); renderBuy(); renderHold(); renderScouts(); renderTab(); }
+function fullRender(){ if (!S) return; renderStatus(); renderSummary(); renderPlan(); renderBuy(); renderHold(); renderAlerts(); renderScouts(); renderMarket(); renderTab(); }
 function changed(){ savePortfolio(); openForm = null; fullRender(); }
 function note(msg){ $('errBox').hidden = false; $('errBox').textContent = msg; }
+const newId = () => Math.random().toString(36).slice(2, 12);
 
 async function load(){
   try {
@@ -413,11 +751,27 @@ async function load(){
     $('statusText').textContent = S ? 'Could not refresh; showing the last report.' : "The scouts haven't published a report yet. Check back in a few minutes.";
   }
 }
+async function boot(){
+  try { CONF = await (await fetch('config.json?t=' + Date.now(), {cache: 'no-store'})).json(); } catch(e) { CONF = {}; }
+  await load(); syncHoldings(); setInterval(load, 60000);
+  $('jTips').innerHTML = ['What should I buy?', 'Anything to sell?', 'How are the scouts doing?', 'How is the market?', 'Fodder prices', 'New SBCs']
+    .map(t => `<span class="chip" data-ask="${esc(t)}">${esc(t)}</span>`).join('');
+}
 
 document.addEventListener('click', async e => {
+  const chip = e.target.closest('[data-ask]'); if (chip) { say(chip.dataset.ask, true); jarvis(chip.dataset.ask); return; }
   const b = e.target.closest('button'); if (!b) return;
   const d = b.dataset;
-  if (d.tab) { tab = d.tab; renderTab(); }
+  if (b.id === 'jarvisBtn') { const j = $('jarvis'); j.hidden = !j.hidden; if (!j.hidden && !$('jlog').children.length) say("Hi, I'm Jarvis. Ask me what to buy, what to sell, or tell me what you bought."); if (!j.hidden) $('jInput').focus(); }
+  else if (b.id === 'micBtn') listen();
+  else if (b.id === 'testAlert') {
+    try { const r = await fetch('https://ntfy.sh/' + CONF.alerts_topic, {method: 'POST', headers: {Title: 'Jarvis test'}, body: 'Phone alerts are working. I will message you when to buy and sell.'});
+          $('alertMsg').textContent = r.ok ? 'Sent. Check your phone.' : 'Could not send. Try again in a minute.'; } catch(err) { $('alertMsg').textContent = 'Could not send. Check your internet connection.'; }
+  }
+  else if (d.mv) { moverDir = d.mv; renderMarket(); }
+  else if (d.chart) { chartRange[d.chart] = d.range; renderBuy(); }
+  else if (d.own) { $('manualBox').open = true; $('mCard').value = d.own; $('mBuy').value = MKT?.c[d.own]?.[3] || ''; $('mBuy').focus(); $('manualBox').scrollIntoView({behavior: 'smooth', block: 'center'}); }
+  else if (d.tab) { tab = d.tab; renderTab(); }
   else if (d.open) { openForm = d.open; fullRender(); }
   else if ('cancel' in d) { openForm = null; fullRender(); }
   else if (d.delyes) { P.holdings = P.holdings.filter(h => h.id !== d.delyes); changed(); }
@@ -432,10 +786,10 @@ document.addEventListener('click', async e => {
     catch(err) { note("That backup couldn't be read. Copy it again from your other device and paste the whole text."); }
   }
 });
-const newId = () => Math.random().toString(36).slice(2, 12);
 document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target, v = n => f.elements[n] && f.elements[n].value;
+  if (f.id === 'jForm') { const q = $('jInput').value.trim(); if (!q) return; say(q, true); $('jInput').value = ''; jarvis(q); return; }
   if (f.dataset.buyform) {
     const r = S.buy.find(x => String(x.card) === f.dataset.buyform);
     const buy = parseCoins(v('buy')), target = parseCoins(v('target'));
@@ -447,14 +801,14 @@ document.addEventListener('submit', e => {
     const price = parseCoins(v('price')); if (!(price > 0)) return note('Enter the price it sold for.');
     const h = P.holdings.find(x => x.id === f.dataset.sellform); if (!h) return;
     P.holdings = P.holdings.filter(x => x !== h);
-    P.sold.push({...h, name: h.name || S.names?.[h.card_id] || `Card ${h.card_id}`, sold: price, sold_at: Date.now()});
+    P.sold.push({...h, name: h.name || nameOf(h.card_id), sold: price, sold_at: Date.now()});
     changed();
   } else if (f.id === 'manualForm') {
     const card = parseCard($('mCard').value), buy = parseCoins($('mBuy').value), target = parseCoins($('mTarget').value);
     if (!card) return note('Paste the FUT.GG link of the card, or its ID number.');
     if (!(buy > 0)) return note('Enter the price you paid.');
-    P.holdings.push({id: newId(), card_id: card, name: S.names?.[card], qty: Math.max(1, parseInt($('mQty').value) || 1),
-                     buy, target: target > 0 ? target : null, bought_at: Date.now()});
+    P.holdings.push({id: newId(), card_id: card, name: MKT?.c[card]?.[0] || nameOf(card), ovr: MKT?.c[card]?.[1], qty: Math.max(1, parseInt($('mQty').value) || 1),
+                     buy, target: target > 0 ? target : roundUp(buy * 1.1), bought_at: Date.now()});
     f.reset(); changed();
   } else if (f.id === 'rulesForm') {
     R.min_profit = parseCoins($('rProfit').value) || 0; R.daily_limit = parseCoins($('rDaily').value) || 50000;
@@ -462,8 +816,10 @@ document.addEventListener('submit', e => {
   }
 });
 $('budget').addEventListener('change', () => { const b = parseCoins($('budget').value); if (b > 0) { R.budget = b; saveRules(); fullRender(); } });
+$('searchBox').addEventListener('focus', loadMarket);
+$('searchBox').addEventListener('input', async () => { await loadMarket(); renderSearch(); });
 
-load(); setInterval(load, 60000);
+boot();
 </script>
 </body>
 </html>

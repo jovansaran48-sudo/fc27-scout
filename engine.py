@@ -22,6 +22,7 @@ import traceback
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timedelta, timezone
 from array import array
 
 # ----------------------------------------------------------------- settings --
@@ -38,7 +39,8 @@ DEFAULTS = {
     "min_profit": 2000,          # minimum profit after tax for the whole pick (all copies), in coins
     "max_copies": 10,            # most copies of one card per pick; buying more pushes its price up
     "stop_loss": 0.06,           # sell if the price falls this far below what you paid
-    "max_hold_hours": 30,        # daily trades: sell by the next evening
+    "max_hold_hours": 24,        # daily trades: a 1-day listing, then sell at market
+    "checkin_hours": 2,          # you check the app about every 2 hours, so drops are only acted on then
     "watchlist": [],             # card ids you always want checked
     "v": 2,
 }
@@ -47,6 +49,10 @@ DEFAULTS = {
 TRIAL_DAYS = 3
 TRIAL_MIN_TRADES = 10
 TRIAL_MIN_WINRATE = 0.60
+
+# Each strategy is also tested with a more cautious and a more ambitious sell target
+VARIANTS = (("", 1.0, "Standard"), ("safe", 0.7, "Safe target"), ("bold", 1.3, "Bold target"))
+SITE_URL = "https://jovansaran48-sudo.github.io/fc27-scout/"
 
 R2 = "https://r2.fut.gg/" + GAME + "/"
 SITE = "https://www.fut.gg"
@@ -248,7 +254,10 @@ def features(m, cid):
     def ch(seconds):
         p = m.price_ago(cid, seconds)
         return (now / p - 1) if p else None
+    _, day = m.window("mid", cid, now_ts - 86400, now_ts)
+    moves = sum(1 for a, b in zip(day, day[1:]) if a != b)
     return {
+        "moves24": moves, "pts24": len(day),
         "now": now, "ts": now_ts,
         "ch30m": ch(1800), "ch1h": ch(3600), "ch2h": ch(7200), "ch6h": ch(6 * 3600), "ch24h": ch(86400),
         "p24h": m.price_ago(cid, 86400),
@@ -358,7 +367,41 @@ SCOUT_NAMES = {s["key"]: s["name"] for s in SCOUTS}
 
 
 # ---------------------------------------------------------------- director --
-def director(cid, x, flags, cfg, held_ids, allowance):
+def ea_event(ts):
+    """EA's weekly rhythm (UK time). Returns a reason to wait, or None."""
+    t = london(ts)
+    wd, h = t.weekday(), t.hour + t.minute / 60
+    if wd == 4 and 15 <= h < 18.5:
+        return "New promo packs usually drop Friday at 6pm UK time (9pm UAE) and prices often dip then, so it's waiting until after"
+    if wd == 3 and 6 <= h < 9:
+        return "Weekly rewards usually land Thursday morning UK time and flood the market, so it's waiting until prices settle"
+    return None
+
+
+def london(ts):
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.fromtimestamp(ts, ZoneInfo("Europe/London"))
+    except Exception:
+        return datetime.fromtimestamp(ts, timezone.utc)
+
+
+def next_events(ts):
+    """The next few market events, as (name, unix time, note)."""
+    base = london(ts)
+    plan = [(2, 18, "Team of the Week", "new TOTW in packs; fodder often dips"),
+            (3, 8, "Weekly rewards", "Rivals rewards flood the market; prices dip"),
+            (4, 18, "Promo drop", "new promo packs; the biggest dip of the week, then demand")]
+    out = []
+    for wd, hr, name, note in plan:
+        d = base.replace(hour=hr, minute=0, second=0, microsecond=0) + timedelta(days=(wd - base.weekday()) % 7)
+        if d.timestamp() <= ts:
+            d += timedelta(days=7)
+        out.append({"name": name, "at": int(d.timestamp()), "note": note})
+    return sorted(out, key=lambda e: e["at"])
+
+
+def director(cid, x, flags, cfg, held_ids, allowance, mood=None, event=None):
     """Decide BUY / WATCH / REJECT for one card the scouts flagged."""
     buy = round_down(x["now"])
     target = round_down(sum(f["target"] for f in flags) / len(flags))
@@ -385,6 +428,18 @@ def director(cid, x, flags, cfg, held_ids, allowance):
         return no("Price is still dropping fast; buying now risks catching a falling card")
     if x["fine_pts"] < 20 and x["hours"] < 3:
         return "WATCH", ["Not enough price history recorded yet"], buy, target, net, roi, 0, qty
+    if x.get("pts24", 0) >= 40 and x.get("moves24", 99) < 3:
+        return no("Its price has barely moved today, so hardly anyone is trading it and it could be slow to sell")
+    keys = {f.get("key") for f in flags}
+    contrarian = keys <= {"crash", "rebound"}          # these strategies are built for falling markets
+    mk = (mood or {}).get("ch24h")
+    if mk is not None and not contrarian:
+        if mk <= -0.08:
+            return "WATCH", [f"The whole market is down {abs(mk):.0%} today, so it's waiting for things to settle"], buy, target, net, roi, 0, qty
+        if mk <= -0.03 and roi < cfg["min_roi"] + 0.03:
+            return "WATCH", [f"The market is down {abs(mk):.0%} today, so it wants at least {cfg['min_roi'] + 0.03:.0%} profit"], buy, target, net, roi, 0, qty
+    if event and not contrarian:
+        return "WATCH", [event], buy, target, net, roi, 0, qty
 
     score = roi * 100
     if len(flags) > 1:
@@ -437,11 +492,48 @@ def load_json(name, default):
         return default
 
 
-def save_json(name, data):
+def save_json(name, data, pretty=False):
     path = os.path.join(DATA_DIR, name)
     with open(path + ".tmp", "w") as f:
         json.dump(data, f, separators=(",", ":"))
     os.replace(path + ".tmp", path)
+
+
+def load_config():
+    try:
+        with open("config.json") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def vkey(key, tag):
+    return f"{key}:{tag}" if tag else key
+
+
+def scaled(flags, now, k):
+    return [{**f, "target": now + (f["target"] - now) * k} for f in flags]
+
+
+def ntfy_post(topic, body, title=None, tags=None, click=None, priority=None):
+    if not topic or SIM:
+        return False
+    headers = {"User-Agent": UA}
+    if title:
+        headers["Title"] = title.encode("utf-8").decode("latin-1", "replace")
+    if tags:
+        headers["Tags"] = tags
+    if click:
+        headers["Click"] = click
+    if priority:
+        headers["Priority"] = str(priority)
+    try:
+        req = urllib.request.Request(f"https://ntfy.sh/{topic}", data=body.encode("utf-8"), headers=headers, method="POST")
+        urllib.request.urlopen(req, timeout=15, context=ssl_ctx()).read()
+        return True
+    except Exception as e:
+        log("Phone alert failed:", e)
+        return False
 
 
 class Engine:
@@ -449,9 +541,16 @@ class Engine:
         os.makedirs(DATA_DIR, exist_ok=True)
         self.cfg = dict(DEFAULTS)
         self.cfg.update(load_json("settings.json", {}))
+        self.conf = load_config()
         self.market = Market()
         self.meta = load_json("cards.json", {})
         self.paper = load_json("paper.json", {"open": [], "closed": [], "first": {}})
+        self.crawl = load_json("catalog_state.json", {"page": 1})
+        self.alerts = load_json("alerts.json", {"sent": {}, "brief": "", "status": {}})
+        self.mood_hist = load_json("mood.json", [])
+        self.sbcs = []
+        self.holdings = []
+        self.sync_seen = None
         self.ids = []
         self.rarities = load_json("rarities.json", {})
         self.status = {"state": "live", "message": "Live"}
@@ -462,6 +561,7 @@ class Engine:
         except Exception as e:
             log("Could not read price history, starting fresh:", e)
 
+    # ---------------------------------------------------------- reading data
     def fetch(self):
         man = get_json(R2 + "manifest.json")
         ph, ih = man[f"player-prices-{PLATFORM}-dyn"], man["player-prices-index"]
@@ -492,7 +592,37 @@ class Engine:
         log(f"Read {len(keep):,} card prices")
         return True
 
-    def lookup_names(self, cids, limit=40):
+    def crawl_catalog(self, pages=12):
+        """Read FUT.GG's player list a few pages per run, so every card gets a name and rating."""
+        st = self.crawl
+        if st.get("done_at") and time.time() - st["done_at"] < 86400:
+            return
+        page = st.get("page", 1)
+        for _ in range(pages):
+            try:
+                d = get_json(f"{SITE}/api/fut/players/v2/{GAME}/?page={page}", timeout=20)
+            except Exception as e:
+                log("Player list page", page, "failed:", e)
+                break
+            for v in d.get("data", []):
+                key = str(v.get("eaId"))
+                m = self.meta.get(key) or {}
+                m["name"] = v.get("commonName") or v.get("cardName") or m.get("name")
+                m["ovr"] = v.get("overall") or m.get("ovr")
+                m["rname"] = v.get("rarityName") or m.get("rname")
+                m.pop("failed", None)
+                self.meta[key] = m
+            nxt = d.get("next")
+            if not nxt or not d.get("data"):
+                st.update(page=1, done_at=time.time())
+                log("Player list complete:", len(self.meta), "cards named")
+                break
+            page = nxt
+            st["page"] = page
+            time.sleep(0.6)
+        save_json("catalog_state.json", st)
+
+    def lookup_names(self, cids, limit=30):
         done = 0
         for cid in cids:
             known = self.meta.get(str(cid))
@@ -503,57 +633,133 @@ class Engine:
                 for v in data.get("data", []):
                     if str(v.get("game")) != GAME:
                         continue
-                    self.meta[str(v["eaId"])] = {
-                        "name": v.get("nickname") or v.get("commonName") or
-                                f"{v.get('firstName', '')} {v.get('lastName', '')}".strip(),
-                        "ovr": v.get("overall"), "rarity": v.get("rarityEaId"),
-                        "pos": POSITIONS.get(v.get("position"), ""),
-                    }
+                    m = self.meta.get(str(v["eaId"])) or {}
+                    m.update(name=v.get("nickname") or v.get("commonName") or
+                             f"{v.get('firstName', '')} {v.get('lastName', '')}".strip(),
+                             ovr=v.get("overall"), rarity=v.get("rarityEaId"),
+                             pos=POSITIONS.get(v.get("position"), ""))
+                    self.meta[str(v["eaId"])] = m
                 self.meta.setdefault(str(cid), {"name": None, "failed": time.time()})
             except Exception as e:
                 log("Name lookup failed for", cid, "-", e)
                 self.meta.setdefault(str(cid), {"name": None, "failed": time.time()})
                 if done == 0 and isinstance(e, urllib.error.HTTPError) and e.code in (401, 403, 429):
-                    log("FUT.GG is refusing name lookups from here; cards will show their ID")
                     break
             done += 1
-            time.sleep(1.0)
-        save_json("cards.json", self.meta)
+            time.sleep(0.8)
+
+    def fetch_sbcs(self):
+        try:
+            d = get_json(f"{SITE}/api/fut/sbc/{GAME}/", timeout=20)
+        except Exception as e:
+            log("SBC list failed:", e)
+            return
+        out = []
+        for v in d.get("data", []):
+            out.append({"name": v.get("name"), "desc": v.get("description"), "cost": v.get("cost"),
+                        "ends": v.get("endTime"), "created": v.get("createdAt"), "new": bool(v.get("isNew")),
+                        "repeat": bool(v.get("isRepeatable")), "url": SITE + (v.get("url") or "/sbc/")})
+        out.sort(key=lambda v: v.get("created") or "", reverse=True)
+        self.sbcs = out[:30]
+
+    def read_holdings(self):
+        """Your cards, as the website last shared them (so alerts can tell you when to sell)."""
+        topic = self.conf.get("sync_topic")
+        if not topic or SIM:
+            return
+        try:
+            req = urllib.request.Request(f"https://ntfy.sh/{topic}/json?poll=1&since=12h", headers={"User-Agent": UA})
+            lines = urllib.request.urlopen(req, timeout=15, context=ssl_ctx()).read().decode().splitlines()
+            msgs = [json.loads(l) for l in lines if l.strip()]
+            msgs = [m for m in msgs if m.get("event") == "message"]
+            if not msgs:
+                return
+            last = msgs[-1]
+            body = json.loads(last["message"])
+            self.holdings = [{"id": h[0], "card_id": int(h[1]), "qty": int(h[2]), "buy": int(h[3]),
+                              "target": int(h[4]) if h[4] else None, "bought_at": float(h[5])}
+                             for h in body.get("h", [])]
+            # ntfy keeps messages 12 hours; re-share them before they expire
+            if time.time() - last.get("time", 0) > 8 * 3600:
+                ntfy_post(topic, last["message"])
+        except Exception as e:
+            log("Could not read your cards from the website:", e)
 
     def card_info(self, cid):
         m = self.meta.get(str(cid)) or {}
-        r = m.get("rarity")
+        r = m.get("rname") or (self.rarities.get(str(m.get("rarity")), "") if m.get("rarity") is not None else "")
         return {"id": cid, "url": card_url(cid), "name": m.get("name") or f"Card {cid}",
-                "ovr": m.get("ovr"), "pos": m.get("pos") or "",
-                "rarity": self.rarities.get(str(r), "") if r is not None else ""}
+                "ovr": m.get("ovr"), "pos": m.get("pos") or "", "rarity": r}
 
+    # --------------------------------------------------------------- grading
     def strategy_stats(self, now_ts):
         out = {}
         for s in SCOUTS:
-            k = s["key"]
-            closed = [t for t in self.paper["closed"] if t["scout"] == k and t["closed"] >= now_ts - 7 * 86400]
-            n = len(closed)
-            wins = sum(1 for t in closed if t["net"] > 0)
-            net = sum(t["net"] for t in closed)
-            first = self.paper["first"].get(k)
-            days = (now_ts - first) / 86400 if first else 0
-            wr = wins / n if n else None
-            if n >= TRIAL_MIN_TRADES and days >= TRIAL_DAYS:
-                status = "LIVE" if wr >= TRIAL_MIN_WINRATE and net > 0 else "OFF"
-            else:
-                status = "TRIAL"
-            out[k] = {"key": k, "name": s["name"], "focus": s["focus"], "status": status, "trades": n,
-                      "wins": wins, "winrate": wr, "net": net, "days": round(days, 1),
-                      "open": sum(1 for t in self.paper["open"] if t["scout"] == k)}
+            for tag, k, label in VARIANTS:
+                key = vkey(s["key"], tag)
+                closed = [t for t in self.paper["closed"] if t["scout"] == key and t["closed"] >= now_ts - 7 * 86400]
+                n = len(closed)
+                wins = sum(1 for t in closed if t["net"] > 0)
+                net = sum(t["net"] for t in closed)
+                invested = sum(t["buy"] for t in closed)
+                first = self.paper["first"].get(key)
+                days = (now_ts - first) / 86400 if first else 0
+                wr = wins / n if n else None
+                if n >= TRIAL_MIN_TRADES and days >= TRIAL_DAYS:
+                    status = "LIVE" if wr >= TRIAL_MIN_WINRATE and net > 0 else "OFF"
+                else:
+                    status = "TRIAL"
+                out[key] = {"key": key, "base": s["key"], "variant": label, "k": k, "name": s["name"],
+                            "focus": s["focus"], "status": status, "trades": n, "wins": wins, "winrate": wr,
+                            "net": net, "roi": net / invested if invested else None, "days": round(days, 1),
+                            "open": sum(1 for t in self.paper["open"] if t["scout"] == key)}
         return out
 
+    def paper_step(self, feats, picks, now_ts):
+        p, still = self.paper, []
+        for t in p["open"]:
+            x = feats.get(t["card"])
+            if not x:
+                still.append(t)
+                continue
+            now = x["now"]
+            if t["target"] and now >= t["target"]:          # the 1-day listing sells, even while you're away
+                act, price, why = "SELL", t["target"], "Listing sold at the target price"
+            elif now_ts - t.get("last_check", t["opened"]) >= self.cfg["checkin_hours"] * 3600:
+                t["last_check"] = now_ts                     # one of your check-ins
+                act, price, why = exit_check(t["buy"], t["target"], t["opened"], now, now_ts, self.cfg)
+            else:
+                act = "HOLD"
+            if act == "HOLD":
+                still.append(t)
+            else:
+                p["closed"].append({**t, "sold": int(price), "closed": now_ts, "reason": why,
+                                    "net": after_tax(price) - t["buy"]})
+        p["open"] = still
+        have = {(t["scout"], t["card"]) for t in p["open"]}
+        per = {}
+        for t in p["open"]:
+            per[t["scout"]] = per.get(t["scout"], 0) + 1
+        for key, cid, price, target in picks:
+            if (key, cid) in have or per.get(key, 0) >= 25:
+                continue
+            p["open"].append({"id": uuid.uuid4().hex[:10], "scout": key, "card": cid, "buy": int(price),
+                              "target": int(target), "opened": now_ts, "last_check": now_ts})
+            p["first"].setdefault(key, now_ts)
+            per[key] = per.get(key, 0) + 1
+            have.add((key, cid))
+        p["closed"] = [t for t in p["closed"] if t["closed"] >= now_ts - 30 * 86400][-4000:]
+
+    # ------------------------------------------------------------------- run
     def run(self, fetched=True):
         m = self.market
         now_ts = m.fine_ts[-1] if m.fine_ts else time.time()
         feats = {cid: x for cid in m.fine if (x := features(m, cid))}
         mood = market_mood(m, feats)
+        event = ea_event(time.time())
         stats = self.strategy_stats(now_ts)
         allowance = self.cfg["daily_limit"]
+        held_ids = {h["card_id"] for h in self.holdings}
 
         # 1. scouts flag cards
         flagged, counts = {}, {s["key"]: 0 for s in SCOUTS}
@@ -565,93 +771,191 @@ class Engine:
                     flagged.setdefault(cid, []).append(r)
                     counts[s["key"]] += 1
 
-        # 2. the director decides; paper trading judges each scout on its own calls
+        # 2. the director decides; every strategy version is paper-tested on its own calls
         out = {"BUY": [], "WATCH": [], "REJECT": []}
         picks = []
         for cid, flags in flagged.items():
             x = feats[cid]
-            dec, notes, buy, target, net, roi, score, qty = director(cid, x, flags, self.cfg, set(), allowance)
-            if dec == "BUY" and all(stats[f["key"]]["status"] == "OFF" for f in flags):
+            vstats = [stats[vkey(f["key"], tag)] for f in flags for tag, _, _ in VARIANTS]
+            live = sorted([v for v in vstats if v["status"] == "LIVE"], key=lambda v: -v["net"])
+            k = live[0]["k"] if live else 1.0
+            dec, notes, buy, target, net, roi, score, qty = director(cid, x, scaled(flags, x["now"], k), self.cfg,
+                                                                     held_ids, allowance, mood, event)
+            if dec == "BUY" and all(v["status"] == "OFF" for v in vstats):
                 dec, notes = "REJECT", ["Its strategy is switched off: it lost coins in paper trading"]
             out[dec].append({"card": cid, "notes": notes, "buy": buy, "target": target, "net": net,
-                             "roi": round(roi, 4), "score": score,
-                             "live": any(stats[f["key"]]["status"] == "LIVE" for f in flags),
+                             "roi": round(roi, 4), "score": score, "live": bool(live),
+                             "strategy": (f"{live[0]['name']} · {live[0]['variant']}" if live else None),
                              "scouts": [f["scout"] for f in flags], "why": [f["why"] for f in flags],
-                             "hold": flags[0]["hold"], "now": x["now"]})
+                             "hold": flags[0]["hold"], "now": x["now"], "ch24h": x["ch24h"]})
             for f in flags:
-                d1 = director(cid, x, [f], self.cfg, set(), allowance)
-                if d1[0] == "BUY":
-                    picks.append((f["key"], cid, x["now"], d1[3]))
+                for tag, kk, _ in VARIANTS:
+                    d1 = director(cid, x, scaled([f], x["now"], kk), self.cfg, set(), allowance, mood, event)
+                    if d1[0] == "BUY":
+                        picks.append((vkey(f["key"], tag), cid, x["now"], d1[3]))
         out["BUY"].sort(key=lambda r: (not r["live"], -r["score"]))
         out["WATCH"].sort(key=lambda r: -r["score"])
         out["REJECT"].sort(key=lambda r: -r["roi"])
-        out = {k: v[:n] for (k, v), n in zip(out.items(), (60, 30, 40))}
+        out = {"BUY": out["BUY"][:60], "WATCH": out["WATCH"][:30], "REJECT": out["REJECT"][:40]}
 
-        # 3. paper trades: close what hit an exit, open the new picks
+        # 3. paper trades
         if fetched:
-            p, still = self.paper, []
-            for t in p["open"]:
-                x = feats.get(t["card"])
-                act, price, why = exit_check(t["buy"], t["target"], t["opened"], x["now"], now_ts, self.cfg) if x else ("HOLD", None, "")
-                if act == "HOLD":
-                    still.append(t)
-                else:
-                    p["closed"].append({**t, "sold": int(price), "closed": now_ts, "reason": why,
-                                        "net": after_tax(price) - t["buy"]})
-            p["open"] = still
-            have = {(t["scout"], t["card"]) for t in p["open"]}
-            per = {}
-            for t in p["open"]:
-                per[t["scout"]] = per.get(t["scout"], 0) + 1
-            for key, cid, price, target in picks:
-                if (key, cid) in have or per.get(key, 0) >= 25:
-                    continue
-                p["open"].append({"id": uuid.uuid4().hex[:10], "scout": key, "card": cid,
-                                  "buy": int(price), "target": int(target), "opened": now_ts})
-                p["first"].setdefault(key, now_ts)
-                per[key] = per.get(key, 0) + 1
-                have.add((key, cid))
-            p["closed"] = [t for t in p["closed"] if t["closed"] >= now_ts - 30 * 86400][-3000:]
+            self.paper_step(feats, picks, now_ts)
             stats = self.strategy_stats(now_ts)
 
         # 4. names for everything the website will show
-        need = [r["card"] for k in ("BUY", "WATCH") for r in out[k]] + [t["card"] for t in self.paper["open"]]
+        need = ([r["card"] for k2 in ("BUY", "WATCH") for r in out[k2]] + [t["card"] for t in self.paper["open"]]
+                + list(held_ids))
         if not SIM:
             self.lookup_names(list(dict.fromkeys(need)))
+            self.crawl_catalog()
+            self.fetch_sbcs()
 
-        def card_rows(rows):
-            return [{**r, **self.card_info(r["card"])} for r in rows]
-
-        def paper_rows(rows, closed):
-            res = []
-            for t in rows:
-                info = self.card_info(t["card"])
-                v = {**t, "name": info["name"], "url": info["url"], "ovr": info["ovr"],
-                     "strategy": SCOUT_NAMES.get(t["scout"], t["scout"])}
-                if not closed:
-                    x = feats.get(t["card"])
-                    v["now"], v["pl"] = (x["now"], after_tax(x["now"]) - t["buy"]) if x else (None, None)
-                res.append(v)
-            return res
-
+        # 5. extras for the website
+        if mood.get("ch24h") is not None and (not self.mood_hist or now_ts - self.mood_hist[-1][0] >= 3000):
+            self.mood_hist.append([int(now_ts), round(mood["ch24h"], 4)])
+            self.mood_hist = [r for r in self.mood_hist if r[0] >= now_ts - 14 * 86400]
+        chart_ids = list(dict.fromkeys([r["card"] for r in out["BUY"][:40]] + [r["card"] for r in out["WATCH"][:20]]
+                                       + [t["card"] for t in self.paper["open"][:60]] + list(held_ids)))
         state = {
             "updated": now_ts, "generated": time.time(), "status": self.status,
             "platform": PLATFORM.upper(), "hours": round(m.history_hours(), 1), "cards": len(feats),
-            "mood": mood, "rules": {k: self.cfg[k] for k in ("min_roi", "min_profit", "daily_limit", "max_copies",
-                                                             "stop_loss", "max_hold_hours")},
+            "mood": mood, "mood_hist": self.mood_hist, "event": event, "events": next_events(time.time()),
+            "rules": {k2: self.cfg[k2] for k2 in ("min_roi", "min_profit", "daily_limit", "max_copies",
+                                                  "stop_loss", "max_hold_hours", "checkin_hours")},
             "trial": {"days": TRIAL_DAYS, "min_trades": TRIAL_MIN_TRADES, "min_winrate": TRIAL_MIN_WINRATE},
-            "scouts": [{**stats[s["key"]], "flagged": counts[s["key"]]} for s in SCOUTS],
-            "buy": card_rows(out["BUY"]), "watch": card_rows(out["WATCH"]), "reject": card_rows(out["REJECT"]),
-            "paper_open": paper_rows(sorted(self.paper["open"], key=lambda t: -t["opened"])[:80], False),
-            "paper_closed": paper_rows(self.paper["closed"][-80:][::-1], True),
+            "scouts": [{**stats[vkey(s["key"], tag)], "flagged": counts[s["key"]]} for s in SCOUTS for tag, _, _ in VARIANTS],
+            "buy": self.rows(out["BUY"]), "watch": self.rows(out["WATCH"]), "reject": self.rows(out["REJECT"]),
+            "paper_open": self.paper_rows(sorted(self.paper["open"], key=lambda t: -t["opened"])[:100], feats, stats),
+            "paper_closed": self.paper_rows(self.paper["closed"][-120:][::-1], feats, stats),
+            "charts": {str(c): self.chart(c) for c in chart_ids if c in feats},
+            "fodder": self.fodder(feats), "movers": self.movers(feats), "sbcs": self.sbcs,
+            "synced": len(self.holdings), "alerts_topic": self.conf.get("alerts_topic"),
             "prices": {str(c): x["now"] for c, x in feats.items()},
-            "names": {k: v["name"] for k, v in self.meta.items() if v.get("name")},
         }
-        return state
+        market = {"t": now_ts, "c": {str(c): [self.meta.get(str(c), {}).get("name") or "",
+                                              self.meta.get(str(c), {}).get("ovr") or 0,
+                                              self.card_info(c)["rarity"], x["now"],
+                                              round(x["ch24h"] * 1000) if x["ch24h"] is not None else None,
+                                              x["lo7"], x["hi7"]] for c, x in feats.items()}}
+        self.send_alerts(state, feats, now_ts)
+        return state, market
 
-    def save(self, state):
+    def rows(self, rows):
+        return [{**r, **self.card_info(r["card"])} for r in rows]
+
+    def paper_rows(self, rows, feats, stats):
+        res = []
+        for t in rows:
+            info = self.card_info(t["card"])
+            st = stats.get(t["scout"], {})
+            v = {**t, "name": info["name"], "url": info["url"], "ovr": info["ovr"],
+                 "strategy": f"{st.get('name', t['scout'])}" + (f" · {st['variant']}" if st.get("k", 1) != 1 else "")}
+            if "sold" not in t:
+                x = feats.get(t["card"])
+                v["now"], v["pl"] = (x["now"], after_tax(x["now"]) - t["buy"]) if x else (None, None)
+            res.append(v)
+        return res
+
+    def chart(self, cid):
+        m = self.market
+        mid = m.data["mid"].get(cid, array("I"))
+        hr = m.data["hourly"].get(cid, array("I"))
+        return {"m": list(mid[-288:]), "h": list(hr[-168:])}
+
+    def fodder(self, feats):
+        best = {}
+        for c, x in feats.items():
+            mt = self.meta.get(str(c)) or {}
+            ovr, r = mt.get("ovr"), (mt.get("rname") or "")
+            if not ovr or not (75 <= ovr <= 91) or r not in ("Rare", "Common") or x["status"]:
+                continue
+            cur = best.get(ovr)
+            if not cur or x["now"] < cur["price"]:
+                best[ovr] = {"ovr": ovr, "price": x["now"], "prev": x["p24h"] or None, "name": mt.get("name"),
+                             "card": c, "rarity": r}
+        return [best[k] for k in sorted(best, reverse=True)]
+
+    def movers(self, feats):
+        pool = [(c, x) for c, x in feats.items() if 2000 <= x["now"] <= 200000 and x["ch24h"] is not None
+                and not x["status"] and (self.meta.get(str(c)) or {}).get("name") and x.get("moves24", 0) >= 3]
+        pool.sort(key=lambda cx: cx[1]["ch24h"])
+
+        def row(c, x):
+            return {**self.card_info(c), "now": x["now"], "ch24h": round(x["ch24h"], 4)}
+        return {"up": [row(c, x) for c, x in pool[::-1][:10]], "down": [row(c, x) for c, x in pool[:10]]}
+
+    # ---------------------------------------------------------------- Jarvis
+    def send_alerts(self, state, feats, now_ts):
+        topic = self.conf.get("alerts_topic")
+        if not topic:
+            return
+        sent = self.alerts.setdefault("sent", {})
+        cutoff = time.time() - 3 * 86400
+        for k2 in [k2 for k2, t in sent.items() if t < cutoff]:
+            del sent[k2]
+        # new proven picks
+        for r in [r for r in state["buy"] if r["live"]][:5]:
+            key = f"buy:{r['card']}"
+            if key in sent and time.time() - sent[key] < 12 * 3600:
+                continue
+            qty = max(1, min(self.cfg["max_copies"], int(self.cfg["daily_limit"] // r["buy"])))
+            if ntfy_post(topic, f"Bid up to {r['buy']:,}, then list at {r['target']:,} for 1 day. "
+                                f"About +{r['net']:,} each after tax ({r['roi']:.0%}). Up to {qty} copies, within today's limit.",
+                         title=f"Buy: {r['name']}" + (f" {r['ovr']}" if r.get('ovr') else ""),
+                         tags="moneybag", click=SITE_URL):
+                sent[key] = time.time()
+        # your cards
+        for h in self.holdings:
+            x = feats.get(h["card_id"])
+            if not x:
+                continue
+            act, price, why = exit_check(h["buy"], h["target"], h["bought_at"], x["now"], now_ts, self.cfg)
+            if act == "HOLD":
+                continue
+            key = f"{act}:{h['id']}"
+            if key in sent:
+                continue
+            name = self.card_info(h["card_id"])["name"]
+            verb = "Sell" if act == "SELL" else "Cut your loss on"
+            if ntfy_post(topic, f"{why}. Now {x['now']:,}, you paid {h['buy']:,}. "
+                                f"Profit after tax: {(after_tax(x['now']) - h['buy']) * h['qty']:+,}.",
+                         title=f"{verb} {name}", tags="rotating_light" if act == "CUT" else "white_check_mark",
+                         click=SITE_URL, priority=4):
+                sent[key] = time.time()
+        # strategies switching on or off
+        prev = self.alerts.setdefault("status", {})
+        for s in state["scouts"]:
+            old = prev.get(s["key"])
+            if old and old != s["status"] and s["status"] in ("LIVE", "OFF"):
+                label = s["name"] + ("" if s["k"] == 1 else f" ({s['variant']})")
+                msg = (f"Passed its test: {s['trades']} paper trades, {round((s['winrate'] or 0) * 100)}% wins, {s['net']:+,} coins."
+                       if s["status"] == "LIVE" else f"Switched off after losing in paper trading ({s['net']:+,} coins).")
+                ntfy_post(topic, msg, title=f"{label} is {'LIVE' if s['status'] == 'LIVE' else 'OFF'}",
+                          tags="trophy" if s["status"] == "LIVE" else "no_entry", click=SITE_URL)
+            prev[s["key"]] = s["status"]
+        # morning briefing, about 9am UAE (05:00 UTC)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if datetime.now(timezone.utc).hour >= 5 and self.alerts.get("brief") != today:
+            live = [s for s in state["scouts"] if s["status"] == "LIVE"]
+            best = [r for r in state["buy"] if r["live"]][:3]
+            mk = state["mood"].get("ch24h")
+            lines = [f"Market: {'no reading yet' if mk is None else f'{mk:+.1%} in 24h'}.",
+                     f"Proven strategies: {len(live)}." + (" " + ", ".join(s["name"] + ("" if s["k"] == 1 else f" ({s['variant']})") for s in live[:4]) if live else " Still testing; don't buy yet."),
+                     ("Top picks: " + "; ".join(f"{r['name']} at {r['buy']:,} -> {r['target']:,}" for r in best)) if best else "No proven picks right now."]
+            nxt = state["events"][0] if state["events"] else None
+            if nxt:
+                lines.append(f"Next: {nxt['name']} ({nxt['note']}).")
+            if ntfy_post(topic, "\n".join(lines), title="Jarvis morning briefing", tags="sunrise", click=SITE_URL):
+                self.alerts["brief"] = today
+
+    def save(self, state, market):
         save_json("paper.json", self.paper)
+        save_json("cards.json", self.meta)
+        save_json("alerts.json", self.alerts)
+        save_json("mood.json", self.mood_hist)
         save_json("state.json", state)
+        save_json("market.json", market)
         self.market.save(os.path.join(DATA_DIR, "history.pkl.gz"))
 
 
@@ -665,10 +969,11 @@ def main():
         eng.status = {"state": "error", "message": f"Couldn't read FUT.GG prices on the last run ({reason}). "
                                                     "The next run will try again."}
         traceback.print_exc()
-    state = eng.run(fetched)
-    eng.save(state)
+    eng.read_holdings()
+    state, market = eng.run(fetched)
+    eng.save(state, market)
     log(f"Done: {len(state['buy'])} buys, {len(state['watch'])} watching, "
-        f"{sum(len(state[k]) for k in ('paper_open',))} open paper trades, {state['hours']} h of history")
+        f"{len(state['paper_open'])} open paper trades, {state['hours']} h of history, {len(eng.meta)} names")
 
 
 if __name__ == "__main__":

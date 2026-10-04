@@ -51,6 +51,8 @@ jobs:
           mkdir -p public
           cp index.html public/index.html
           cp data/state.json public/state.json
+          cp data/market.json public/market.json 2>/dev/null || true
+          cp config.json public/config.json 2>/dev/null || true
 
       - uses: actions/configure-pages@v5
 
