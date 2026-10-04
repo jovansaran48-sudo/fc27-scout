@@ -1,0 +1,61 @@
+name: Scout Room
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: scout-room
+  cancel-in-progress: false
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Load saved price history
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: scout-data-${{ github.run_id }}
+          restore-keys: scout-data-
+
+      - name: Run the scouts and the director
+        run: python engine.py
+
+      - name: Save price history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: scout-data-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Build the website
+        run: |
+          mkdir -p public
+          cp index.html public/index.html
+          cp data/state.json public/state.json
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
