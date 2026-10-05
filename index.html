@@ -240,6 +240,25 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
 .wave i{width:3px;height:30%;background:var(--cyan);border-radius:2px;animation:wv .9s ease-in-out infinite}
 .wave i:nth-child(2){animation-delay:.1s}.wave i:nth-child(3){animation-delay:.2s}.wave i:nth-child(4){animation-delay:.3s}.wave i:nth-child(5){animation-delay:.4s}
 @keyframes wv{50%{height:100%}}
+/* dashboard: three columns that always end level; the last list in each column grows into the space instead of leaving a gap */
+.dash{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);align-items:stretch}
+.dash>div{display:flex;flex-direction:column;gap:16px;min-width:0}
+.dash .panel,.dash .plan{min-width:0}
+.scroll{overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:rgba(242,193,78,.4) transparent}
+#tabBody{max-height:620px}
+#buyList{max-height:900px} #scoutList{max-height:900px} #holdList{max-height:420px} #fodderBody,#moversBody,#sbcBody{max-height:520px} #searchResults{max-height:320px}
+@media (min-width:760px){ .dash{grid-template-columns:repeat(2,minmax(0,1fr))} .c1{grid-column:1/-1} }
+@media (min-width:1200px){
+  .dash{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr)} .c1{grid-column:auto}
+  .a-buy,.a-movers,.a-fodder{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+  #buyList,#moversBody,#fodderBody{flex:1 1 0;max-height:none}
+  #buyList{min-height:560px} #moversBody{min-height:300px} #fodderBody{min-height:320px}
+}
+.mvhead{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:8px 0 2px}
+.warm{padding:8px 14px;gap:6px;font-size:13px}
+.warm span{display:none}
+header{padding-top:12px}
+h1{font-size:clamp(38px,5.6vw,64px)}
 #confetti{position:fixed;inset:0;pointer-events:none;z-index:60}
 .reveal{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
 @keyframes rise{from{opacity:.001;transform:translateY(10px)}}
@@ -269,24 +288,29 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
   <div id="errBox" class="err" hidden></div>
   <div id="warmBox" class="warm" hidden></div>
 
-  <section class="plan" aria-label="Today's plan">
+  <main class="dash">
+    <div class="c1">
+      <section class="plan a-plan" aria-label="Today's plan">
     <div class="phead"><h2>Today's plan</h2><span class="meta" id="planMeta"></span></div>
     <ol id="planList"></ol>
   </section>
-
-  <div class="grid">
-    <section class="panel">
+      <section class="panel a-buy">
       <div class="phead">
         <h2>Director's buy list</h2>
         <span class="hint" id="buyHint"></span>
       </div>
-      <div id="buyList"></div>
+      <div id="buyList" class="scroll"></div>
     </section>
-
-    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
-      <section class="panel">
+      <section class="panel a-search">
+      <div class="phead"><h2>Card search</h2><span class="hint" id="searchHint">Search any FC 27 card by name</span></div>
+      <input id="searchBox" placeholder="Type a player name, e.g. Bellingham" autocomplete="off" style="width:100%;font-size:16px;padding:9px 11px">
+      <div class="results scroll" id="searchResults"></div>
+    </section>
+    </div>
+    <div class="c2">
+      <section class="panel a-cards">
         <div class="phead"><h2>Your cards</h2><span class="hint" id="holdCount"></span></div>
-        <div id="holdList" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="holdList" class="scroll" style="display:flex;flex-direction:column;gap:10px"></div>
         <details id="manualBox">
           <summary class="hint" style="cursor:pointer">Add a card you already own</summary>
           <form class="form" id="manualForm" style="margin-top:8px">
@@ -299,48 +323,36 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
           <p class="hint" style="margin-top:6px">Tip: use Card search below to find a card by name.</p>
         </details>
       </section>
-
-      <section class="panel" id="alertsPanel">
+      <section class="panel a-alerts" id="alertsPanel">
         <h2>Phone alerts</h2>
         <div id="alertsBody"></div>
       </section>
-
-      <section class="panel">
-        <h2>Strategy scorecard</h2>
-        <p class="hint" id="trialRule"></p>
-        <div id="scoutList"></div>
-      </section>
-    </div>
-  </div>
-
-  <div class="grid3">
-    <section class="panel">
+      <section class="panel a-mood">
       <div class="phead"><h2>Market mood</h2><span class="hint" id="moodHint"></span></div>
       <div id="moodBody"></div>
     </section>
-    <section class="panel">
+      <section class="panel a-movers">
+      <div class="phead"><h2>Biggest movers</h2><span class="hint">last 24 hours</span></div>
+      <div id="moversBody" class="scroll"></div>
+    </section>
+    </div>
+    <div class="c3">
+      <section class="panel a-score">
+        <h2>Strategy scorecard</h2>
+        <p class="hint" id="trialRule"></p>
+        <div id="scoutList" class="scroll"></div>
+      </section>
+      <section class="panel a-fodder">
       <div class="phead"><h2>Fodder board</h2><span class="hint">cheapest gold by rating</span></div>
-      <div id="fodderBody"></div>
+      <div id="fodderBody" class="scroll"></div>
     </section>
-    <section class="panel">
-      <div class="phead"><h2>Biggest movers</h2><div class="seg" id="moverSeg"><button type="button" data-mv="up" aria-pressed="true">Rising</button><button type="button" data-mv="down" aria-pressed="false">Falling</button></div></div>
-      <div id="moversBody"></div>
-    </section>
-  </div>
-
-  <div class="grid">
-    <section class="panel">
-      <div class="phead"><h2>Card search</h2><span class="hint" id="searchHint">Search any FC 27 card by name</span></div>
-      <input id="searchBox" placeholder="Type a player name, e.g. Bellingham" autocomplete="off" style="width:100%;font-size:16px;padding:9px 11px">
-      <div class="results" id="searchResults"></div>
-    </section>
-    <section class="panel">
+      <section class="panel a-sbc">
       <div class="phead"><h2>Live SBCs</h2><span class="hint" id="sbcHint"></span></div>
-      <div id="sbcBody"></div>
+      <div id="sbcBody" class="scroll"></div>
     </section>
-  </div>
-
-  <section class="panel">
+    </div>
+  </main>
+<section class="panel a-tabs">
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="paper" id="tab-paper">Paper trades</button>
       <button role="tab" aria-selected="false" data-tab="watch" id="tab-watch">Watching</button>
@@ -348,7 +360,7 @@ td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-
       <button role="tab" aria-selected="false" data-tab="sold" id="tab-sold">Sold &amp; profit</button>
       <button role="tab" aria-selected="false" data-tab="rules" id="tab-rules">Rules &amp; backup</button>
     </div>
-    <div id="tabBody"></div>
+    <div id="tabBody" class="scroll"></div>
   </section>
 
   <button class="orb" id="jarvisBtn" type="button" aria-label="Open Jarvis"><span class="lbl">JARVIS</span></button>
@@ -569,8 +581,14 @@ function renderBuy(){
   if (S.event) html += `<p class="callout">${esc(S.event)}.</p>`;
   if (live.length) html += `<div style="display:flex;flex-direction:column;gap:10px">${live.map(pickHTML).join('')}</div>`;
   else if (!S.buy.some(r => r.live)) html += `<p class="callout"><b>Nothing to buy with real coins yet.</b> A strategy version goes live once it has at least ${S.trial.min_trades} paper trades over ${S.trial.days}+ days, wins ${Math.round(S.trial.min_winrate*100)}% or more, and is in profit after tax.</p>`;
-  if (trial.length) html += `<h2 style="font-size:18px;margin-top:6px">On trial · paper only</h2><div style="display:flex;flex-direction:column;gap:10px">${trial.slice(0,8).map((r,i) => pickHTML(r, i + live.length)).join('')}</div>`;
+  if (trial.length) html += `<h2 style="font-size:18px;margin-top:6px">On trial · paper only</h2><div style="display:flex;flex-direction:column;gap:10px">${trial.slice(0,20).map((r,i) => pickHTML(r, i + live.length)).join('')}</div>`;
   if (!S.buy.length) html += `<p class="empty">${(S.hours||0) < 1 ? 'The scouts are recording their first prices.' : 'No card passes the director right now. That is normal on a quiet market; the list updates every few minutes.'}</p>`;
+  if (live.length + trial.length < 8 && S.watch.length) {
+    html += `<div class="phead" style="margin-top:12px"><h2 style="font-size:19px">Close to qualifying</h2><span class="hint">the director is watching these</span></div>
+      <table class="mini">${S.watch.slice(0, 20).map(r => `<tr><td style="width:36px">${futBadge(r, true)}</td>
+        <td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a><br><span class="hint">${esc((r.why[0] || '').replace(/^./, c => c.toUpperCase()))}</span></td>
+        <td class="n">${fmt(r.now)}<br><span class="hint">→ ${fmt(r.target)}</span></td><td class="n">${pill(r.net, pct(r.roi, 1))}</td></tr>`).join('')}</table>`;
+  }
   if (tooBig.length) html += `<p class="hint">${tooBig.length} more approved pick${tooBig.length === 1 ? '' : 's'} don't fit what you have left today or can't reach your ${fmt(R.min_profit)}-coin minimum profit.</p>`;
   $('buyList').innerHTML = html;
 }
@@ -672,10 +690,10 @@ function renderMarket(){
       <td class="n">${fmt(r.price)}</td><td class="n">${r.prev ? pill(r.price/r.prev - 1, pct(r.price/r.prev - 1)) : ''}</td></tr>`).join('')}</table>
       <p class="hint" style="margin:0">Cheapest normal gold card at each rating. Rising fodder usually means a popular SBC needs it.</p>`
     : '<p class="empty">Fills in once the scouts have read FUT.GG\'s player list (a few hours).</p>';
-  const mv = (S.movers || {})[moverDir] || [];
-  document.querySelectorAll('#moverSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mv === moverDir));
-  $('moversBody').innerHTML = mv.length ? `<table class="mini">${mv.map(r => `<tr><td>${r.ovr ? `<span class="ovr">${r.ovr}</span>` : ''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></td>
-      <td class="n">${fmt(r.now)}</td><td class="n">${pill(r.ch24h, pct(r.ch24h))}</td></tr>`).join('')}</table>`
+  const mvRows = list => `<table class="mini">${list.map(r => `<tr><td>${r.ovr ? `<span class="ovr">${r.ovr}</span>` : ''}<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a></td>
+      <td class="n">${fmt(r.now)}</td><td class="n">${pill(r.ch24h, pct(r.ch24h))}</td></tr>`).join('')}</table>`;
+  const up = (S.movers || {}).up || [], dn = (S.movers || {}).down || [];
+  $('moversBody').innerHTML = up.length || dn.length ? `<div class="mvhead">▲ Rising</div>${mvRows(up)}<div class="mvhead">▼ Falling</div>${mvRows(dn)}`
     : '<p class="empty">Needs a day of prices.</p>';
   const sb = S.sbcs || [];
   $('sbcHint').textContent = sb.length ? `${sb.filter(s => s.new).length} new` : '';
