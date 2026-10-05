@@ -254,10 +254,13 @@ def features(m, cid):
     def ch(seconds):
         p = m.price_ago(cid, seconds)
         return (now / p - 1) if p else None
+    recent = [p for p in f[-4:-1] if p]
+    ref = statistics.median(recent) if recent else now
+    glitch = bool(recent) and (now < ref * 0.5 or now > ref * 2)     # one-off bad reading from FUT.GG
     _, day = m.window("mid", cid, now_ts - 86400, now_ts)
     moves = sum(1 for a, b in zip(day, day[1:]) if a != b)
     return {
-        "moves24": moves, "pts24": len(day),
+        "moves24": moves, "pts24": len(day), "glitch": glitch,
         "now": now, "ts": now_ts,
         "ch30m": ch(1800), "ch1h": ch(3600), "ch2h": ch(7200), "ch6h": ch(6 * 3600), "ch24h": ch(86400),
         "p24h": m.price_ago(cid, 86400),
@@ -415,6 +418,8 @@ def director(cid, x, flags, cfg, held_ids, allowance, mood=None, event=None):
         return "REJECT", [why], buy, target, net, roi, 0, max(qty, 1)
     if x["status"]:
         return no("FUT.GG marks this price as unreliable")
+    if x.get("glitch"):
+        return no("This price looks like a one-off bad reading, so it's ignored until the next check")
     if cid in held_ids:
         return no("You already hold this card")
     if qty < 1:
@@ -473,7 +478,7 @@ def exit_check(buy, target, opened, now_price, now_ts, cfg):
     hours = (now_ts - opened) / 3600
     if target and now_price >= target:
         return "SELL", target, "Target price reached"
-    if now_price <= buy * (1 - cfg["stop_loss"]):
+    if now_price <= buy * (1 - cfg["stop_loss"]) and buy - now_price >= 2 * step(buy):   # one price step is just noise
         return "CUT", now_price, f"Down {cfg['stop_loss']:.0%}: stop-loss"
     if hours >= cfg["max_hold_hours"]:
         if now_price >= break_even(buy):
@@ -723,6 +728,9 @@ class Engine:
                 still.append(t)
                 continue
             now = x["now"]
+            if x.get("glitch"):                              # wait for a real price before acting
+                still.append(t)
+                continue
             if t["target"] and now >= t["target"]:          # the 1-day listing sells, even while you're away
                 act, price, why = "SELL", t["target"], "Listing sold at the target price"
             elif now_ts - t.get("last_check", t["opened"]) >= self.cfg["checkin_hours"] * 3600:
@@ -908,7 +916,7 @@ class Engine:
         # your cards
         for h in self.holdings:
             x = feats.get(h["card_id"])
-            if not x:
+            if not x or x.get("glitch"):
                 continue
             act, price, why = exit_check(h["buy"], h["target"], h["bought_at"], x["now"], now_ts, self.cfg)
             if act == "HOLD":
