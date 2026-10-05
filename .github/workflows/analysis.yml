@@ -1,0 +1,35 @@
+name: Paper trade report (one-off, read-only)
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Load saved data (read only)
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: scout-data-none
+          restore-keys: scout-data-
+      - name: Build report
+        run: |
+          mkdir out
+          cp data/paper.json out/ || true
+          cp data/state.json out/ || true
+          cp data/mood.json out/ || true
+          python3 - <<'PY'
+          import pickle, gzip, json
+          d = pickle.load(gzip.open("data/history.pkl.gz"))
+          ts = d["ts"]; data = d["data"]
+          paper = json.load(open("data/paper.json"))
+          cards = {t["card"] for t in paper["open"] + paper["closed"]}
+          out = {name: {"ts": ts[name], "p": {str(c): list(data[name].get(c, [])) for c in cards}} for name in ("fine", "mid", "hourly")}
+          json.dump(out, open("out/trade_charts.json", "w"))
+          PY
+      - name: Publish report to the analysis branch
+        run: |
+          cd out && git init -q && git checkout -q -b analysis && git add . 
+          git -c user.name=report -c user.email=report@users.noreply.github.com commit -qm report
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" analysis
