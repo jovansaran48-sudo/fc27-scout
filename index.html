@@ -416,7 +416,7 @@ function saveRules(){ store.set('rules', R); }
 // share your cards with Jarvis so it can tell your phone when to sell
 async function syncHoldings(force){
   if (!CONF.sync_topic) return;
-  const body = JSON.stringify({t: Date.now(), h: P.holdings.map(h => [h.id, h.card_id, h.qty, h.buy, h.target || 0, Math.round(h.bought_at/1000)])});
+  const body = JSON.stringify({t: Date.now(), h: P.holdings.map(h => [h.id, h.card_id, h.qty, h.buy, h.target || 0, Math.round(h.bought_at/1000), h.hold_h || 0])});
   if (!force && store.get('lastSyncBody', '') === body && Date.now() - store.get('lastSync', 0) < 6*3600e3) return;
   try { const r = await fetch('https://ntfy.sh/' + CONF.sync_topic, {method: 'POST', body});
         if (r.ok) { store.set('lastSync', Date.now()); store.set('lastSyncBody', body); renderAlerts(); } } catch(e) {}
@@ -440,7 +440,7 @@ function spending(){
   return {spent, inCards, left: Math.max(0, Math.min(R.daily_limit - spent, R.budget - inCards))};
 }
 function exitCheck(h, now){
-  const r = S.rules, hours = (Date.now() - h.bought_at) / 3.6e6;
+  const r = {...S.rules, max_hold_hours: h.hold_h || S.rules.max_hold_hours}, hours = (Date.now() - h.bought_at) / 3.6e6;
   if (now == null) return ['HOLD', 'No live price yet'];
   if (h.target && now >= h.target) return ['SELL', `Target ${fmt(h.target)} reached: if your listing hasn't sold, sell now`];
   if (now <= h.buy * (1 - r.stop_loss) && h.buy - now >= 2 * step(h.buy)) return ['CUT', `Down ${Math.round(r.stop_loss*100)}% or more: sell to stop the loss`];
@@ -850,7 +850,7 @@ async function jarvis(q){
     if (!price) return say(`How much did you pay for ${c.name}? Say: I bought ${qty} ${c.name} at 4800.`);
     const pick = allCards().find(r => r.card === c.card);
     const target = pick?.target || roundUp(price * 1.1);
-    P.holdings.push({id: newId(), card_id: c.card, name: c.name, ovr: pick?.ovr, qty, buy: price, target, bought_at: Date.now()});
+    P.holdings.push({id: newId(), card_id: c.card, name: c.name, ovr: pick?.ovr, hold_h: pick?.hold_h || null, qty, buy: price, target, bought_at: Date.now()});
     changed();
     return say(`Logged ${qty}× ${c.name} at ${fmt(price)}. List ${qty > 1 ? 'them' : 'it'} at ${fmt(target)} for 1 day. Break-even is ${fmt(breakEven(price))}. I'll message your phone if you should sell.`);
   }
@@ -1017,7 +1017,7 @@ document.addEventListener('submit', e => {
     const r = S.buy.find(x => String(x.card) === f.dataset.buyform);
     const buy = parseCoins(v('buy')), target = parseCoins(v('target'));
     if (!(buy > 0)) return note('Enter the price you paid.');
-    P.holdings.push({id: newId(), card_id: +f.dataset.buyform, name: r?.name, ovr: r?.ovr, qty: Math.max(1, parseInt(v('qty')) || 1),
+    P.holdings.push({id: newId(), card_id: +f.dataset.buyform, name: r?.name, ovr: r?.ovr, hold_h: r?.hold_h || null, qty: Math.max(1, parseInt(v('qty')) || 1),
                      buy, target: target > 0 ? target : null, bought_at: Date.now()});
     changed();
   } else if (f.dataset.sellform) {

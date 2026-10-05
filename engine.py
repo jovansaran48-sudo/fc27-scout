@@ -285,6 +285,30 @@ def market_mood(m, feats):
 
 
 # ------------------------------------------------------------------ scouts --
+CTX = {"now": 0, "meta": {}, "sbc_new": False, "demand": {}, "cheap": {}}
+
+
+def _ovr(cid):
+    return (CTX["meta"].get(str(cid)) or {}).get("ovr") or 0
+
+
+def _window(spans):
+    """True when UK time falls inside any (weekday, start hour, end hour) span; end may pass midnight."""
+    t = london(CTX["now"])
+    wd, h = t.weekday(), t.hour + t.minute / 60
+    for d, a, b in spans:
+        if b > 24:
+            if (wd == d and h >= a) or (wd == (d + 1) % 7 and h < b - 24):
+                return True
+        elif wd == d and a <= h < b:
+            return True
+    return False
+
+
+def _ago(x, hours):
+    p = x["_m"].price_ago(x["_cid"], hours * 3600)
+    return p or None
+
 # Each scout watches its own slice of the market and hands candidates to the director.
 def scout_daily(cid, x, mood):
     """Daily Swing: buy near the day's low on cards that have bounced back day after day."""
@@ -358,6 +382,72 @@ def scout_rebound(cid, x, mood):
                 "why": f"dropped {abs(x['ch24h']):.0%} in 24h and is now bouncing back"}
 
 
+def scout_sbc(cid, x, mood):
+    """SBC Sniper: a new SBC is pushing one rating's fodder up; buy the cheap cards of that rating that haven't moved yet."""
+    if not CTX["sbc_new"] or not (500 <= x["now"] <= 30000):
+        return None
+    o = _ovr(cid)
+    d = CTX["demand"].get(o)
+    if d is None or d < 0.04 or cid not in CTX["cheap"].get(o, ()):
+        return None
+    c6 = x["ch6h"]
+    if c6 is None or c6 > d * 0.5 or (x["ch1h"] or 0) < -0.01:
+        return None
+    return {"target": x["now"] * (1 + min(d, 0.15)), "hold": "same day", "hold_h": 24,
+            "why": f"{o}-rated fodder is up {d:.0%} in 6 hours since a new SBC, and this card hasn't caught up yet"}
+
+
+def scout_prebuy(cid, x, mood):
+    """Promo Pre-buy: the afternoon before TOTW (Wed) or promo (Fri) packs, buy high-rated cards already being bid up."""
+    if not _window([(1, 12, 39), (3, 12, 39)]):        # Tue 12:00 to Wed 15:00, Thu 12:00 to Fri 15:00 (UK)
+        return None
+    o = _ovr(cid)
+    if o < 84 or not (5000 <= x["now"] <= 60000) or x["ch24h"] is None:
+        return None
+    if 0.03 <= x["ch24h"] <= 0.15 and (x["ch2h"] or 0) >= 0:
+        return {"target": x["now"] * 1.10, "hold": "until just after the pack drop", "hold_h": 36,
+                "why": f"{o}-rated card up {x['ch24h']:.0%} the day before a pack drop, often a sign people expect an upgrade or demand"}
+
+
+def scout_promodip(cid, x, mood):
+    """Promo Dip: buy quality cards that fell hard when TOTW or promo packs dropped; they usually recover in a day or two."""
+    if not _window([(2, 18, 32), (4, 18, 32)]):        # Wed 18:00 to Thu 08:00, Fri 18:00 to Sat 08:00 (UK)
+        return None
+    o = _ovr(cid)
+    if o < 82 or not (5000 <= x["now"] <= 80000) or x["ch6h"] is None:
+        return None
+    p6 = _ago(x, 6)
+    if p6 and x["ch6h"] <= -0.06 and (x["ch1h"] or 0) >= -0.01:
+        return {"target": p6 * 0.97, "hold": "1-2 days", "hold_h": 48,
+                "why": f"dropped {abs(x['ch6h']):.0%} since the pack drop and has stopped falling; prices usually recover within a day or two"}
+
+
+def scout_wl(cid, x, mood):
+    """Weekend League Meta: buy strong cards in Thursday's rewards dip, sell into Friday's Weekend League demand."""
+    if not _window([(3, 6, 14)]):                       # Thursday 06:00-14:00 UK
+        return None
+    o = _ovr(cid)
+    if o < 85 or not (8000 <= x["now"] <= 50000):
+        return None
+    p12 = _ago(x, 12)
+    if p12 and x["now"] / p12 - 1 <= -0.04 and (x["ch1h"] or 0) >= -0.01:
+        return {"target": p12 * 0.99, "hold": "until Friday evening", "hold_h": 36,
+                "why": f"{o}-rated card down {1 - x['now'] / p12:.0%} in Thursday's rewards dip; Weekend League demand usually lifts it by Friday"}
+
+
+def scout_sunday(cid, x, mood):
+    """Sunday Night Dip: buy strong cards after Weekend League ends, when prices are at their weekly low."""
+    if not _window([(6, 20, 38)]):                      # Sunday 20:00 to Monday 14:00 UK
+        return None
+    o = _ovr(cid)
+    if o < 84 or not (5000 <= x["now"] <= 60000) or x["ch24h"] is None:
+        return None
+    if x["ch24h"] <= -0.05 and (x["ch2h"] or 0) >= -0.01:
+        base = _ago(x, 48) or x["p24h"]
+        return {"target": base * 0.97, "hold": "2-3 days", "hold_h": 60,
+                "why": f"down {abs(x['ch24h']):.0%} as Weekend League ends; prices usually climb back through the week"}
+
+
 SCOUTS = [
     {"key": "daily", "name": "Daily Swing", "focus": "5k-30k cards near today's low that bounced back on 2 of the last 3 days", "fn": scout_daily},
     {"key": "dip", "name": "Dip Hunter", "focus": "Cards trading well below their usual weekly price", "fn": scout_dip},
@@ -365,6 +455,11 @@ SCOUTS = [
     {"key": "momentum", "name": "Momentum Rider", "focus": "Cards on a steady climb that hasn't stalled", "fn": scout_momentum},
     {"key": "fodder", "name": "Fodder Scout", "focus": "Cheap cards (1k-30k) where SBC demand starts", "fn": scout_fodder},
     {"key": "rebound", "name": "Rebound Spotter", "focus": "Big fallers that have started bouncing", "fn": scout_rebound},
+    {"key": "sbc", "name": "SBC Sniper", "focus": "Fodder a new SBC needs, bought before its price catches up", "fn": scout_sbc},
+    {"key": "prebuy", "name": "Promo Pre-buy", "focus": "84+ cards being bid up the day before TOTW or promo packs", "fn": scout_prebuy},
+    {"key": "promodip", "name": "Promo Dip", "focus": "82+ cards that fell when packs dropped (Wed and Fri evenings)", "fn": scout_promodip},
+    {"key": "wl", "name": "Weekend League Meta", "focus": "85+ cards in Thursday's rewards dip, sold into Friday demand", "fn": scout_wl},
+    {"key": "sunday", "name": "Sunday Night Dip", "focus": "84+ cards at their weekly low after Weekend League ends", "fn": scout_sunday},
 ]
 SCOUT_NAMES = {s["key"]: s["name"] for s in SCOUTS}
 
@@ -436,7 +531,7 @@ def director(cid, x, flags, cfg, held_ids, allowance, mood=None, event=None):
     if x.get("pts24", 0) >= 40 and x.get("moves24", 99) < 3:
         return no("Its price has barely moved today, so hardly anyone is trading it and it could be slow to sell")
     keys = {f.get("key") for f in flags}
-    contrarian = keys <= {"crash", "rebound"}          # these strategies are built for falling markets
+    contrarian = keys <= {"crash", "rebound", "promodip", "wl", "sunday"}   # built for falling markets and event dips
     mk = (mood or {}).get("ch24h")
     if mk is not None and not contrarian:
         if mk <= -0.08:
@@ -458,7 +553,7 @@ def director(cid, x, flags, cfg, held_ids, allowance, mood=None, event=None):
         risks.append("price swings a lot hour to hour")
     # Momentum picks aim above recent highs on purpose, so only judge other picks by the week's high,
     # and only once there are 3 days of hourly prices to make that high meaningful.
-    climbers = all(f.get("key") in ("momentum", "fodder") for f in flags)
+    climbers = all(f.get("key") in ("momentum", "fodder", "sbc", "prebuy") for f in flags)
     if x["hi7"] and target > x["hi7"] and x["hours"] >= 72 and not climbers:
         score *= 0.6
         risks.append("target is above this week's high")
@@ -682,7 +777,8 @@ class Engine:
             last = msgs[-1]
             body = json.loads(last["message"])
             self.holdings = [{"id": h[0], "card_id": int(h[1]), "qty": int(h[2]), "buy": int(h[3]),
-                              "target": int(h[4]) if h[4] else None, "bought_at": float(h[5])}
+                              "target": int(h[4]) if h[4] else None, "bought_at": float(h[5]),
+                              "hold_h": int(h[6]) if len(h) > 6 and h[6] else None}
                              for h in body.get("h", [])]
             # ntfy keeps messages 12 hours; re-share them before they expire
             if time.time() - last.get("time", 0) > 8 * 3600:
@@ -735,7 +831,8 @@ class Engine:
                 act, price, why = "SELL", t["target"], "Listing sold at the target price"
             elif now_ts - t.get("last_check", t["opened"]) >= self.cfg["checkin_hours"] * 3600:
                 t["last_check"] = now_ts                     # one of your check-ins
-                act, price, why = exit_check(t["buy"], t["target"], t["opened"], now, now_ts, self.cfg)
+                rules = {**self.cfg, "max_hold_hours": t.get("hold_h", self.cfg["max_hold_hours"])}
+                act, price, why = exit_check(t["buy"], t["target"], t["opened"], now, now_ts, rules)
             else:
                 act = "HOLD"
             if act == "HOLD":
@@ -748,11 +845,12 @@ class Engine:
         per = {}
         for t in p["open"]:
             per[t["scout"]] = per.get(t["scout"], 0) + 1
-        for key, cid, price, target in picks:
+        for key, cid, price, target, hold_h in picks:
             if (key, cid) in have or per.get(key, 0) >= 25:
                 continue
             p["open"].append({"id": uuid.uuid4().hex[:10], "scout": key, "card": cid, "buy": int(price),
-                              "target": int(target), "opened": now_ts, "last_check": now_ts})
+                              "target": int(target), "opened": now_ts, "last_check": now_ts,
+                              **({"hold_h": hold_h} if hold_h else {})})
             p["first"].setdefault(key, now_ts)
             per[key] = per.get(key, 0) + 1
             have.add((key, cid))
@@ -768,6 +866,26 @@ class Engine:
         stats = self.strategy_stats(now_ts)
         allowance = self.cfg["daily_limit"]
         held_ids = {h["card_id"] for h in self.holdings}
+
+        # 0. context for the timed and SBC scouts
+        CTX.update(now=time.time(), meta=self.meta, demand={}, cheap={})
+        recent = [v for v in self.sbcs if v.get("created")]
+        try:
+            CTX["sbc_new"] = any(time.time() - datetime.fromisoformat(v["created"].replace("Z", "+00:00")).timestamp() < 48 * 3600 for v in recent)
+        except Exception:
+            CTX["sbc_new"] = any(v.get("new") for v in self.sbcs)
+        groups = {}
+        for c, x in feats.items():
+            mt = self.meta.get(str(c)) or {}
+            if 75 <= (mt.get("ovr") or 0) <= 91 and (mt.get("rname") or "") in ("Rare", "Common") and not x["status"]:
+                groups.setdefault(mt["ovr"], []).append((x["now"], c, x["ch6h"]))
+        for o, lst in groups.items():
+            lst.sort()
+            cheap = lst[:15]
+            ch = [c6 for _, _, c6 in cheap if c6 is not None]
+            if len(ch) >= 5:
+                CTX["demand"][o] = statistics.median(ch)
+            CTX["cheap"][o] = {c for _, c, _ in cheap}
 
         # 1. scouts flag cards
         flagged, counts = {}, {s["key"]: 0 for s in SCOUTS}
@@ -795,12 +913,13 @@ class Engine:
                              "roi": round(roi, 4), "score": score, "live": bool(live),
                              "strategy": (f"{live[0]['name']} · {live[0]['variant']}" if live else None),
                              "scouts": [f["scout"] for f in flags], "why": [f["why"] for f in flags],
-                             "hold": flags[0]["hold"], "now": x["now"], "ch24h": x["ch24h"]})
+                             "hold": flags[0]["hold"], "hold_h": max((f.get("hold_h") or 0) for f in flags) or None,
+                             "now": x["now"], "ch24h": x["ch24h"]})
             for f in flags:
                 for tag, kk, _ in VARIANTS:
                     d1 = director(cid, x, scaled([f], x["now"], kk), self.cfg, set(), allowance, mood, event)
                     if d1[0] == "BUY":
-                        picks.append((vkey(f["key"], tag), cid, x["now"], d1[3]))
+                        picks.append((vkey(f["key"], tag), cid, x["now"], d1[3], f.get("hold_h")))
         out["BUY"].sort(key=lambda r: (not r["live"], -r["score"]))
         out["WATCH"].sort(key=lambda r: -r["score"])
         out["REJECT"].sort(key=lambda r: -r["roi"])
@@ -918,7 +1037,8 @@ class Engine:
             x = feats.get(h["card_id"])
             if not x or x.get("glitch"):
                 continue
-            act, price, why = exit_check(h["buy"], h["target"], h["bought_at"], x["now"], now_ts, self.cfg)
+            rules = {**self.cfg, "max_hold_hours": h.get("hold_h") or self.cfg["max_hold_hours"]}
+            act, price, why = exit_check(h["buy"], h["target"], h["bought_at"], x["now"], now_ts, rules)
             if act == "HOLD":
                 continue
             key = f"{act}:{h['id']}"
