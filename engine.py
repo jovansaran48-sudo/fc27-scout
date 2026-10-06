@@ -49,6 +49,8 @@ DEFAULTS = {
 TRIAL_DAYS = 3
 TRIAL_MIN_TRADES = 10
 TRIAL_MIN_WINRATE = 0.60
+# Fast track: lots of trades with a strong win rate can prove a strategy in 2 days instead of 3
+FAST_DAYS, FAST_MIN_TRADES, FAST_MIN_WINRATE = 2, 40, 0.65
 
 # Each strategy is also tested with a more cautious and a more ambitious sell target
 VARIANTS = (("", 1.0, "Standard"), ("safe", 0.7, "Safe target"), ("bold", 1.3, "Bold target"))
@@ -548,6 +550,8 @@ def ea_event(ts):
     wd, h = t.weekday(), t.hour + t.minute / 60
     if wd == 4 and 15 <= h < 18.5:
         return "New promo packs usually drop Friday at 6pm UK time (9pm UAE) and prices often dip then, so it's waiting until after"
+    if wd == 2 and 15 <= h < 18.5:
+        return "Team of the Week packs usually drop Wednesday at 6pm UK time (9pm UAE) and prices often dip then, so it's waiting until after"
     if wd == 3 and 7.5 <= h < 10:
         return "Weekly rewards usually land Thursday morning UK time and flood the market, so it's waiting until prices settle"
     return None
@@ -885,6 +889,8 @@ class Engine:
                 wr = wins / n if n else None
                 if n >= TRIAL_MIN_TRADES and days >= TRIAL_DAYS:
                     status = "LIVE" if wr >= TRIAL_MIN_WINRATE and net > 0 else "OFF"
+                elif n >= FAST_MIN_TRADES and days >= FAST_DAYS and wr >= FAST_MIN_WINRATE and net > 0:
+                    status = "LIVE"
                 else:
                     status = "TRIAL"
                 out[key] = {"key": key, "base": s["key"], "variant": label, "k": k, "name": s["name"],
@@ -1027,7 +1033,8 @@ class Engine:
             "mood": mood, "mood_hist": self.mood_hist, "event": event, "events": next_events(time.time()),
             "rules": {k2: self.cfg[k2] for k2 in ("min_roi", "min_profit", "daily_limit", "max_copies",
                                                   "stop_loss", "max_hold_hours", "checkin_hours")},
-            "trial": {"days": TRIAL_DAYS, "min_trades": TRIAL_MIN_TRADES, "min_winrate": TRIAL_MIN_WINRATE},
+            "trial": {"days": TRIAL_DAYS, "min_trades": TRIAL_MIN_TRADES, "min_winrate": TRIAL_MIN_WINRATE,
+                      "fast_days": FAST_DAYS, "fast_trades": FAST_MIN_TRADES, "fast_winrate": FAST_MIN_WINRATE},
             "scouts": [{**stats[vkey(s["key"], tag)], "flagged": counts[s["key"]]} for s in SCOUTS for tag, _, _ in VARIANTS],
             "buy": self.rows(out["BUY"]), "watch": self.rows(out["WATCH"]), "reject": self.rows(out["REJECT"]),
             "paper_open": self.paper_rows(sorted(self.paper["open"], key=lambda t: -t["opened"])[:100], feats, stats),

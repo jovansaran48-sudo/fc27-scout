@@ -635,7 +635,7 @@ function renderAlerts(){
 }
 
 function renderScouts(){
-  $('trialRule').textContent = `Each strategy is paper-tested with three sell targets: standard, safe (closer) and bold (higher). A version goes live after ${S.trial.min_trades}+ trades over ${S.trial.days}+ days with ${Math.round(S.trial.min_winrate*100)}%+ wins and a profit after tax, and switches off if its last 7 days stop meeting that.`;
+  $('trialRule').textContent = `Each strategy is paper-tested with three sell targets: standard, safe (closer) and bold (higher). A version goes live after ${S.trial.min_trades}+ trades over ${S.trial.days}+ days with ${Math.round(S.trial.min_winrate*100)}%+ wins and a profit after tax${S.trial.fast_days ? `, or after just ${S.trial.fast_days} days with ${S.trial.fast_trades}+ trades and ${Math.round(S.trial.fast_winrate*100)}%+ wins` : ''}. It switches off if its last 7 days stop meeting that.`;
   const groups = {}, maxNet = Math.max(1, ...S.scouts.map(v => Math.abs(v.net)));
   for (const s of S.scouts) (groups[s.base] = groups[s.base] || []).push(s);
   $('scoutList').innerHTML = Object.values(groups).map(vs => {
