@@ -2,7 +2,7 @@ name: Scout Room
 
 on:
   schedule:
-           - cron: "4,19,34,49 * * * *"   # about every 15 minutes (GitHub's timer can run a few minutes late)
+           - cron: "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"   # asks every 5 minutes; GitHub skips some when busy, so updates land about every 10-15 minutes
   workflow_dispatch:
 
 permissions:
