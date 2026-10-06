@@ -305,6 +305,10 @@ def _window(spans):
     return False
 
 
+def _rname(cid):
+    return ((CTX["meta"].get(str(cid)) or {}).get("rname") or "").lower()
+
+
 def _ago(x, hours):
     p = x["_m"].price_ago(x["_cid"], hours * 3600)
     return p or None
@@ -448,6 +452,74 @@ def scout_sunday(cid, x, mood):
                 "why": f"down {abs(x['ch24h']):.0%} as Weekend League ends; prices usually climb back through the week"}
 
 
+def scout_overnight(cid, x, mood):
+    """Gold Overnight (from the videos): meta golds dip 1-4am UK while players are asleep and recover by the evening."""
+    if not _window([(d, 0, 5) for d in range(7)]):
+        return None
+    o = _ovr(cid)
+    if o < 82 or not (2000 <= x["now"] <= 60000) or x.get("moves24", 0) < 6:
+        return None
+    _, day = x["_m"].window("mid", cid, CTX["now"] - 86400, CTX["now"])
+    if len(day) < 30:
+        return None
+    hi, med = max(day), statistics.median(day)
+    if x["now"] <= med * 0.93 and (x["ch1h"] or 0) >= -0.01:
+        return {"target": min(hi, med * 1.12) * 0.98, "hold": "until this evening's peak", "hold_h": 20,
+                "why": f"{o}-rated card {1 - x['now'] / med:.0%} below its usual daily price in the overnight lull; it normally recovers when players log back on"}
+
+
+def scout_iconflip(cid, x, mood):
+    """Icon & Hero Fluctuation (from the videos): buy icons and heroes after a 6-12 hour slide, evenings and overnight."""
+    if not _window([(d, 17, 30) for d in range(7)]):     # 5pm to 6am UK
+        return None
+    r = _rname(cid)
+    if "icon" not in r and "hero" not in r or not (10000 <= x["now"] <= 50000):
+        return None
+    p12 = _ago(x, 12)
+    if p12 and x["now"] / p12 - 1 <= -0.08 and (x["ch1h"] or 0) >= -0.005:
+        return {"target": p12 * 0.98, "hold": "1-2 days", "hold_h": 48,
+                "why": f"{_ovr(cid)}-rated {'icon' if 'icon' in r else 'hero'} down {1 - x['now'] / p12:.0%} in 12 hours and has stopped sliding"}
+
+
+def scout_flood(cid, x, mood):
+    """Reward Flood (closest testable version of mass bidding): cheap meta cards that crash when rewards or promo packs hit the market."""
+    if not _window([(3, 9.5, 13), (4, 18.5, 22)]):       # Thu 9:30am-1pm, Fri 6:30-10pm UK
+        return None
+    o = _ovr(cid)
+    if not (75 <= o <= 84) or not (1000 <= x["now"] <= 15000) or x["ch2h"] is None:
+        return None
+    p3 = _ago(x, 3)
+    if p3 and x["now"] / p3 - 1 <= -0.12 and (x["ch30m"] or 0) >= -0.01:
+        return {"target": p3 * 0.97, "hold": "1-2 days", "hold_h": 36,
+                "why": f"down {1 - x['now'] / p3:.0%} since the latest reward or pack flood hit the market; flooded cards usually bounce back"}
+
+
+def scout_fod(cid, x, mood):
+    """FOD Investor (from the videos): 84-88 special cards at their weekly low, held while supply dries up."""
+    r = _rname(cid)
+    if not r or r in ("rare", "common") or "icon" in r or "hero" in r:
+        return None
+    o = _ovr(cid)
+    if not (84 <= o <= 88) or not (800 <= x["now"] <= 9000) or not x["med7"] or not x["lo7"] or x["hours"] < 48:
+        return None
+    if x["now"] <= x["lo7"] * 1.03 and x["now"] <= x["med7"] * 0.92 and (x["ch2h"] or 0) >= 0:
+        return {"target": x["med7"] * 0.99, "hold": "up to 3 days", "hold_h": 72,
+                "why": f"{o}-rated special card at its weekly low, {1 - x['now'] / x['med7']:.0%} under its usual price"}
+
+
+def scout_silver(cid, x, mood):
+    """Silver Thursday Rebuy (from the videos): silvers crash on midweek content; buy them back Thursday evening."""
+    if not _window([(3, 17, 24)]):                       # Thursday 5pm to midnight UK
+        return None
+    o = _ovr(cid)
+    if not (65 <= o <= 74) or not (500 <= x["now"] <= 8000):
+        return None
+    p30 = _ago(x, 30)
+    if p30 and x["now"] <= p30 * 0.88 and (x["ch1h"] or 0) >= -0.01:
+        return {"target": p30 * 0.97, "hold": "sell before next Wednesday's content", "hold_h": 120,
+                "why": f"silver down {1 - x['now'] / p30:.0%} since midweek content; sell back before next Wednesday's drop"}
+
+
 SCOUTS = [
     {"key": "daily", "name": "Daily Swing", "focus": "5k-30k cards near today's low that bounced back on 2 of the last 3 days", "fn": scout_daily},
     {"key": "dip", "name": "Dip Hunter", "focus": "Cards trading well below their usual weekly price", "fn": scout_dip},
@@ -460,6 +532,11 @@ SCOUTS = [
     {"key": "promodip", "name": "Promo Dip", "focus": "82+ cards that fell when packs dropped (Wed and Fri evenings)", "fn": scout_promodip},
     {"key": "wl", "name": "Weekend League Meta", "focus": "85+ cards in Thursday's rewards dip, sold into Friday demand", "fn": scout_wl},
     {"key": "sunday", "name": "Sunday Night Dip", "focus": "84+ cards at their weekly low after Weekend League ends", "fn": scout_sunday},
+    {"key": "overnight", "name": "Gold Overnight", "focus": "82+ golds in the 1-4am UK lull, sold at the evening peak (from your videos)", "fn": scout_overnight},
+    {"key": "iconflip", "name": "Icon & Hero Flip", "focus": "Icons and heroes up to 50k after a 6-12 hour slide (from your videos)", "fn": scout_iconflip},
+    {"key": "flood", "name": "Reward Flood", "focus": "75-84 cards crashed by rewards or promo packs; the testable side of mass bidding (from your videos)", "fn": scout_flood},
+    {"key": "fod", "name": "FOD Investor", "focus": "84-88 special cards at their weekly low (from your videos)", "fn": scout_fod},
+    {"key": "silver", "name": "Silver Thursday Rebuy", "focus": "Silvers that crashed on midweek content, bought back Thursday evening (from your videos)", "fn": scout_silver},
 ]
 SCOUT_NAMES = {s["key"]: s["name"] for s in SCOUTS}
 
@@ -471,7 +548,7 @@ def ea_event(ts):
     wd, h = t.weekday(), t.hour + t.minute / 60
     if wd == 4 and 15 <= h < 18.5:
         return "New promo packs usually drop Friday at 6pm UK time (9pm UAE) and prices often dip then, so it's waiting until after"
-    if wd == 3 and 6 <= h < 9:
+    if wd == 3 and 7.5 <= h < 10:
         return "Weekly rewards usually land Thursday morning UK time and flood the market, so it's waiting until prices settle"
     return None
 
@@ -488,7 +565,7 @@ def next_events(ts):
     """The next few market events, as (name, unix time, note)."""
     base = london(ts)
     plan = [(2, 18, "Team of the Week", "new TOTW in packs; fodder often dips"),
-            (3, 8, "Weekly rewards", "Rivals rewards flood the market; prices dip"),
+            (3, 9, "Weekly rewards", "Rivals rewards flood the market; prices dip"),
             (4, 18, "Promo drop", "new promo packs; the biggest dip of the week, then demand")]
     out = []
     for wd, hr, name, note in plan:
@@ -531,7 +608,7 @@ def director(cid, x, flags, cfg, held_ids, allowance, mood=None, event=None):
     if x.get("pts24", 0) >= 40 and x.get("moves24", 99) < 3:
         return no("Its price has barely moved today, so hardly anyone is trading it and it could be slow to sell")
     keys = {f.get("key") for f in flags}
-    contrarian = keys <= {"crash", "rebound", "promodip", "wl", "sunday"}   # built for falling markets and event dips
+    contrarian = keys <= {"crash", "rebound", "promodip", "wl", "sunday", "overnight", "iconflip", "flood", "fod", "silver"}   # built for dips
     mk = (mood or {}).get("ch24h")
     if mk is not None and not contrarian:
         if mk <= -0.08:

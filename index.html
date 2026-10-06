@@ -530,6 +530,11 @@ function renderPlan(){
   const items = [], {fit, left} = sized(), live = fit.filter(r => r.live);
   const sells = P.holdings.map(h => [h, ...exitCheck(h, priceOf(h.card_id))]).filter(x => x[1] !== 'HOLD');
   for (const [h, sig, why] of sells) items.push(`<b>${sig === 'SELL' ? 'Sell' : 'Cut'} ${esc(h.name || nameOf(h.card_id))}</b> (×${h.qty}) at about ${fmt(priceOf(h.card_id))}. <span class="meta">${esc(why)}</span>`);
+  const uk = new Intl.DateTimeFormat('en-GB', {timeZone: 'Europe/London', weekday: 'short', hour: 'numeric', hourCycle: 'h23'}).formatToParts(new Date());
+  const ukDay = uk.find(p => p.type === 'weekday').value, ukHour = +uk.find(p => p.type === 'hour').value;
+  const cheapHeld = P.holdings.filter(h => (h.ovr && h.ovr < 75) || h.buy < 5000);
+  if (ukDay === 'Wed' && ukHour >= 10 && ukHour < 18 && cheapHeld.length)
+    items.push(`<b>Sell your silvers and cheap fodder before 9pm UAE.</b> <span class="meta">Wednesday's new content floods the market with them (${cheapHeld.map(h => esc(h.name || nameOf(h.card_id))).slice(0,4).join(', ')}).</span>`);
   if (S.event) items.push(`<b>Hold off on new buys for now.</b> <span class="meta">${esc(S.event)}.</span>`);
   else if (live.length) {
     let budget = left;
