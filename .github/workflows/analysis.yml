@@ -19,6 +19,8 @@ jobs:
           cp data/paper.json out/ || true
           cp data/state.json out/ || true
           cp data/mood.json out/ || true
+          cp data/market.json out/ || true
+          cp data/cards.json out/ || true
           python3 - <<'PY'
           import pickle, gzip, json
           d = pickle.load(gzip.open("data/history.pkl.gz"))
