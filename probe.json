@@ -1,0 +1,129 @@
+{
+ "len": [
+  20291,
+  20291,
+  20291
+ ],
+ "spp": {
+  "50585891": 3,
+  "50575715": 7,
+  "50596595": 7,
+  "50597808": 9,
+  "50575350": 12,
+  "50596673": 12,
+  "50583500": 22,
+  "50409660": 30
+ },
+ "sps": {
+  "50606840": 5,
+  "50588596": 10,
+  "50596683": 10,
+  "50575428": 15,
+  "50583025": 20,
+  "50548041": 26,
+  "50573109": 30
+ },
+ "players": {
+  "264652": [
+   {
+    "eaId": 50596300,
+    "ovr": 85,
+    "rarity": 0,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 38750,
+    "ps5_static": 38750,
+    "pc_dyn": 34250,
+    "status": 0
+   }
+  ],
+  "251313": [
+   {
+    "eaId": 251313,
+    "ovr": 66,
+    "rarity": 0,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 6000,
+    "ps5_static": 6000,
+    "pc_dyn": 6000,
+    "status": 0
+   }
+  ],
+  "233373": [
+   {
+    "eaId": 233373,
+    "ovr": 67,
+    "rarity": 0,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 5000,
+    "ps5_static": 5000,
+    "pc_dyn": 0,
+    "status": 0
+   }
+  ],
+  "83499": [
+   {
+    "eaId": 83499,
+    "ovr": 68,
+    "rarity": 0,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 6000,
+    "ps5_static": 6000,
+    "pc_dyn": 9600,
+    "status": 0
+   },
+   {
+    "eaId": 50415147,
+    "ovr": 68,
+    "rarity": 0,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 650,
+    "ps5_static": 650,
+    "pc_dyn": 600,
+    "status": 0
+   }
+  ],
+  "231747": [
+   {
+    "eaId": 50563395,
+    "ovr": 91,
+    "rarity": 22,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 7589000,
+    "ps5_static": 7589000,
+    "pc_dyn": 0,
+    "status": 0
+   },
+   {
+    "eaId": 231747,
+    "ovr": 91,
+    "rarity": 0,
+    "untradeable": false,
+    "sbc": false,
+    "obj": false,
+    "hasPrice": true,
+    "ps5_dyn": 3630000,
+    "ps5_static": 3630000,
+    "pc_dyn": 4680000,
+    "status": 0
+   }
+  ]
+ }
+}
