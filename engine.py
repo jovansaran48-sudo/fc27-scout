@@ -50,7 +50,7 @@ TRIAL_DAYS = 3
 TRIAL_MIN_TRADES = 10
 TRIAL_MIN_WINRATE = 0.60
 # Fast track: lots of trades with a strong win rate can prove a strategy in 2 days instead of 3
-FAST_DAYS, FAST_MIN_TRADES, FAST_MIN_WINRATE = 2, 40, 0.65
+FAST_DAYS, FAST_MIN_TRADES, FAST_MIN_WINRATE = 2, 30, 0.60
 
 # Each strategy is also tested with a more cautious and a more ambitious sell target
 VARIANTS = (("", 1.0, "Standard"), ("safe", 0.7, "Safe target"), ("bold", 1.3, "Bold target"))
