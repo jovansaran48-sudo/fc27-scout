@@ -409,6 +409,7 @@ const store = {
 };
 let P = store.get('portfolio', {holdings: [], sold: []});
 let R = Object.assign({budget: 100000, daily_limit: 50000, min_profit: 2000, max_copies: 10}, store.get('rules', {}));
+let BAD = store.get('wrongPrices', {});        // cards you've told the site have a wrong price: id -> {name, price, at}
 let saveOK = true;
 function savePortfolio(){ saveOK = store.set('portfolio', P); syncHoldings(); }
 function saveRules(){ store.set('rules', R); }
@@ -517,7 +518,7 @@ function sized(){
   const sp = spending(), held = new Set(P.holdings.map(h => h.card_id));
   const fit = [], tooBig = [];
   for (const r of S.buy) {
-    if (held.has(r.card)) continue;
+    if (held.has(r.card) || BAD[r.card]) continue;
     // trial picks are paper only, so size them as if the whole day's limit were free
     const qty = Math.min(R.max_copies, Math.floor((r.live ? sp.left : R.daily_limit) / r.buy));
     const row = {...r, qty};
@@ -573,7 +574,7 @@ function pickHTML(r, i){
     <div class="notes">
       <div class="chips"><span class="chip dir">Director: buy · score ${r.score}</span>${trial ? '<span class="st">ON TRIAL</span>' : `<span class="st LIVE">PROVEN</span><span class="chip">${esc(r.strategy)}</span>`}${r.scouts.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
       <p class="why">${r.why.map(esc).map(w => w[0].toUpperCase()+w.slice(1)).join('. ')}.${r.notes.length ? ` <span>${r.notes.map(esc).join(' · ')}</span>` : ''}</p>
-      ${form || `<div class="acts">${trial ? '<span class="hint">Paper-trading this pick. Don\'t spend coins on it until a strategy version passes its test.</span>' : `<button class="go" data-open="${key}">I bought it</button>`}<a class="hint" href="${esc(r.url)}" target="_blank" rel="noopener">FUT.GG ↗</a></div>`}
+      ${form || `<div class="acts">${trial ? '<span class="hint">Paper-trading this pick. Don\'t spend coins on it until a strategy version passes its test.</span>' : `<button class="go" data-open="${key}">I bought it</button>`}<a class="hint" href="${esc(r.url)}" target="_blank" rel="noopener">FUT.GG ↗</a><button class="ghost" type="button" data-bad="${r.card}" title="The price in the game is different">Wrong price?</button></div>`}
     </div></div>`;
 }
 
@@ -751,6 +752,8 @@ function renderTab(){
         <div style="display:flex;align-items:flex-end"><button class="go" type="submit">Save rules</button></div>
       </form>
       <p class="hint">Fixed in the scouts: at least ${Math.round(S.rules.min_roi*100)}% profit after tax, ${Math.round(S.rules.stop_loss*100)}% stop-loss, sell within ${S.rules.max_hold_hours} hours.</p>
+      <h2 style="font-size:19px;margin-top:6px">Cards you marked as wrongly priced</h2>
+      ${Object.keys(BAD).length ? `<div class="chips">${Object.entries(BAD).map(([id, b]) => `<span class="chip">${esc(b.name || 'Card ' + id)} (site said ${fmt(b.price)}) <button class="ghost" data-unbad="${id}" aria-label="Show again">✕</button></span>`).join('')}</div>` : '<p class="hint">None. Use "Wrong price?" on a pick if the game shows a very different price.</p>'}
       <h2 style="font-size:19px;margin-top:6px">Move your cards to another device</h2>
       <p class="hint">Your cards and sales live in this browser. Copy the backup here and paste it into the same page on your other device.</p>
       <div class="acts"><button id="copyBackup" type="button">Copy backup</button><span class="hint" id="copyMsg" role="status"></span></div>
@@ -996,6 +999,8 @@ document.addEventListener('click', async e => {
     try { const r = await fetch('https://ntfy.sh/' + CONF.alerts_topic, {method: 'POST', headers: {Title: 'Jarvis test'}, body: 'Phone alerts are working. I will message you when to buy and sell.'});
           $('alertMsg').textContent = r.ok ? 'Sent. Check your phone.' : 'Could not send. Try again in a minute.'; } catch(err) { $('alertMsg').textContent = 'Could not send. Check your internet connection.'; }
   }
+  else if (d.bad) { const r = S.buy.find(x => String(x.card) === d.bad); BAD[d.bad] = {name: r?.name, price: r?.now, at: Date.now()}; store.set('wrongPrices', BAD); fullRender(); note(`Hidden ${r?.name || 'that card'}. Thanks: tell Claude what price you saw in the game so the bot can be fixed.`); }
+  else if (d.unbad) { delete BAD[d.unbad]; store.set('wrongPrices', BAD); renderTab(); fullRender(); }
   else if (d.mv) { moverDir = d.mv; renderMarket(); }
   else if (d.chart) { chartRange[d.chart] = d.range; renderBuy(); }
   else if (d.own) { $('manualBox').open = true; $('mCard').value = d.own; $('mBuy').value = MKT?.c[d.own]?.[3] || ''; $('mBuy').focus(); $('manualBox').scrollIntoView({behavior: 'smooth', block: 'center'}); }
