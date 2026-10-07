@@ -287,7 +287,7 @@ def market_mood(m, feats):
 
 
 # ------------------------------------------------------------------ scouts --
-CTX = {"now": 0, "meta": {}, "sbc_new": False, "demand": {}, "cheap": {}}
+CTX = {"now": 0, "meta": {}, "sbc_new": False, "demand": {}, "cheap": {}, "twins": {}}
 
 
 def _ovr(cid):
@@ -596,6 +596,9 @@ def director(cid, x, flags, cfg, held_ids, allowance, mood=None, event=None):
         return no("FUT.GG marks this price as unreliable")
     if x.get("glitch"):
         return no("This price looks like a one-off bad reading, so it's ignored until the next check")
+    if cid in CTX["twins"]:
+        lo = CTX["twins"][cid]
+        return no(f"This version's price looks wrong: an identical card trades for about {lo:,}, so it's ignored")
     if cid in held_ids:
         return no("You already hold this card")
     if qty < 1:
@@ -951,7 +954,28 @@ class Engine:
         held_ids = {h["card_id"] for h in self.holdings}
 
         # 0. context for the timed and SBC scouts
-        CTX.update(now=time.time(), meta=self.meta, demand={}, cheap={})
+        CTX.update(now=time.time(), meta=self.meta, demand={}, cheap={}, twins={})
+        # identical cards (same name, rating and type) where one version is priced far above the one people trade:
+        # FUT.GG's price for the rarely traded version is usually a single odd listing, not a real market price
+        same = {}
+        for c, x in feats.items():
+            mt = self.meta.get(str(c)) or {}
+            if mt.get("name") and mt.get("ovr"):
+                same.setdefault((mt["name"], mt["ovr"], mt.get("rname") or mt.get("rarity")), []).append((x["now"], c))
+        for lst in same.values():
+            if len(lst) > 1:
+                lo = min(p for p, _ in lst)
+                for p, c in lst:
+                    if lo and p >= 2 * lo:
+                        CTX["twins"][c] = lo
+        before = (len(self.paper["open"]), len(self.paper["closed"]))
+        self.paper["open"] = [t for t in self.paper["open"] if t["card"] not in CTX["twins"]]
+        self.paper["closed"] = [t for t in self.paper["closed"] if t["card"] not in CTX["twins"]]
+        voided = before[0] - len(self.paper["open"]) + before[1] - len(self.paper["closed"])
+        if voided:
+            self.paper["voided"] = self.paper.get("voided", 0) + voided
+            log(f"Removed {voided} paper trades on cards with fake prices")
+        stats = self.strategy_stats(now_ts)
         recent = [v for v in self.sbcs if v.get("created")]
         try:
             CTX["sbc_new"] = any(time.time() - datetime.fromisoformat(v["created"].replace("Z", "+00:00")).timestamp() < 48 * 3600 for v in recent)
@@ -973,6 +997,8 @@ class Engine:
         # 1. scouts flag cards
         flagged, counts = {}, {s["key"]: 0 for s in SCOUTS}
         for cid, x in feats.items():
+            if cid in CTX["twins"]:
+                continue
             for s in SCOUTS:
                 r = s["fn"](cid, x, mood)
                 if r:
@@ -1019,7 +1045,6 @@ class Engine:
         if not SIM:
             self.lookup_names(list(dict.fromkeys(need)))
             self.crawl_catalog()
-            self.fetch_sbcs()
 
         # 5. extras for the website
         if mood.get("ch24h") is not None and (not self.mood_hist or now_ts - self.mood_hist[-1][0] >= 3000):
@@ -1041,14 +1066,14 @@ class Engine:
             "paper_closed": self.paper_rows(self.paper["closed"][-120:][::-1], feats, stats),
             "charts": {str(c): self.chart(c) for c in chart_ids if c in feats},
             "fodder": self.fodder(feats), "movers": self.movers(feats), "sbcs": self.sbcs,
-            "synced": len(self.holdings), "alerts_topic": self.conf.get("alerts_topic"),
+            "synced": len(self.holdings), "fake_prices": len(CTX["twins"]), "voided": self.paper.get("voided", 0), "alerts_topic": self.conf.get("alerts_topic"),
             "prices": {str(c): x["now"] for c, x in feats.items()},
         }
         market = {"t": now_ts, "c": {str(c): [self.meta.get(str(c), {}).get("name") or "",
                                               self.meta.get(str(c), {}).get("ovr") or 0,
                                               self.card_info(c)["rarity"], x["now"],
                                               round(x["ch24h"] * 1000) if x["ch24h"] is not None else None,
-                                              x["lo7"], x["hi7"]] for c, x in feats.items()}}
+                                              x["lo7"], x["hi7"]] for c, x in feats.items() if c not in CTX["twins"]}}
         self.send_alerts(state, feats, now_ts)
         return state, market
 
@@ -1079,7 +1104,7 @@ class Engine:
         for c, x in feats.items():
             mt = self.meta.get(str(c)) or {}
             ovr, r = mt.get("ovr"), (mt.get("rname") or "")
-            if not ovr or not (75 <= ovr <= 91) or r not in ("Rare", "Common") or x["status"]:
+            if not ovr or not (75 <= ovr <= 91) or r not in ("Rare", "Common") or x["status"] or c in CTX["twins"]:
                 continue
             cur = best.get(ovr)
             if not cur or x["now"] < cur["price"]:
@@ -1089,7 +1114,7 @@ class Engine:
 
     def movers(self, feats):
         pool = [(c, x) for c, x in feats.items() if 2000 <= x["now"] <= 200000 and x["ch24h"] is not None
-                and not x["status"] and (self.meta.get(str(c)) or {}).get("name") and x.get("moves24", 0) >= 3]
+                and not x["status"] and c not in CTX["twins"] and (self.meta.get(str(c)) or {}).get("name") and x.get("moves24", 0) >= 3]
         pool.sort(key=lambda cx: cx[1]["ch24h"])
 
         def row(c, x):
@@ -1139,6 +1164,9 @@ class Engine:
         prev = self.alerts.setdefault("status", {})
         for s in state["scouts"]:
             old = prev.get(s["key"])
+            if old == "LIVE" and s["status"] == "TRIAL":
+                ntfy_post(topic, "Its record changed after a data correction, so it's back on trial. Don't buy its picks until it passes again.",
+                          title=f"{s['name']}{'' if s['k'] == 1 else ' (' + s['variant'] + ')'} is back on trial", tags="warning", click=SITE_URL)
             if old and old != s["status"] and s["status"] in ("LIVE", "OFF"):
                 label = s["name"] + ("" if s["k"] == 1 else f" ({s['variant']})")
                 msg = (f"Passed its test: {s['trades']} paper trades, {round((s['winrate'] or 0) * 100)}% wins, {s['net']:+,} coins."
@@ -1182,6 +1210,8 @@ def main():
                                                     "The next run will try again."}
         traceback.print_exc()
     eng.read_holdings()
+    if not SIM:
+        eng.fetch_sbcs()                 # before the scouts, so SBC Sniper can see new SBCs
     state, market = eng.run(fetched)
     eng.save(state, market)
     log(f"Done: {len(state['buy'])} buys, {len(state['watch'])} watching, "
